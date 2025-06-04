@@ -1,0 +1,9 @@
+[submodule "3rdparty/liegroupMath"]
+	path = 3rdparty/liegroupMath
+	url = https://github.com/khalisfadil/liegroupMath.git
+[submodule "3rdparty/FinalICP"]
+	path = 3rdparty/FinalICP
+	url = https://github.com/khalisfadil/FinalICP.git
+[submodule "3rdparty/robin-map"]
+	path = 3rdparty/robin-map
+	url = https://github.com/Tessil/robin-map.git
