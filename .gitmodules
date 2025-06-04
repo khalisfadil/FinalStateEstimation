@@ -1,6 +1,3 @@
-[submodule "3rdparty/stestimate"]
-	path = 3rdparty/stestimate
-	url = https://github.com/khalisfadil/FinalICP.git
 [submodule "3rdparty/lgmath"]
 	path = 3rdparty/lgmath
 	url = https://github.com/khalisfadil/liegroupMath.git
