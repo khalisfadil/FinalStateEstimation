@@ -19,63 +19,101 @@ namespace  stateestimate{
     // ########################################################################
     // sub_sample_frame
     // ########################################################################
+    void lidarinertialodom::sub_sample_frame(std::vector<Point3D>& frame, double size_voxel, int num_threads, int sequential_threshold) {
 
-    void lidarinertialodom::sub_sample_frame(std::vector<Point3D>& frame, double size_voxel, int num_threads) {
-
+        // Define a voxel map using tsl::robin_map (a fast hash map) to store one point per voxel
+        // Voxel: Key representing voxel coordinates
+        // Point3D: Value representing the 3D point
+        // VoxelHash: Hash function for voxel keys
         using VoxelMap = tsl::robin_map<Voxel, Point3D, VoxelHash>;
 
+        // Check if the input frame size is below the sequential threshold
         if (frame.size() < sequential_threshold) {
-            // Sequential processing for small inputs
+            // Step 1: Sequential processing for small inputs (faster for small datasets)
+            // Create a voxel map to store one point per voxel
             VoxelMap voxel_map;
-            voxel_map.reserve(frame.size() / 4); // Estimate to reduce reallocation
+            // Reserve space to reduce reallocation (estimate: ~1/4 of input size)
+            voxel_map.reserve(frame.size() / 4);
+
+            // Step 2: Iterate through all points in the frame
             for (const auto& point : frame) {
+                // Compute the voxel coordinates for the current point based on size_voxel
                 Voxel voxel = Voxel::Coordinates(point.pt, size_voxel);
+                // Insert the point into the voxel map if the voxel is not already occupied
+                // try_emplace ensures only the first point for a voxel is stored
                 voxel_map.try_emplace(voxel, point);
             }
+
+            // Step 3: Rebuild the frame with downsampled points
+            // Clear the input frame
             frame.clear();
+            // Reserve space for the downsampled points (size of voxel map)
             frame.reserve(voxel_map.size());
+            // Copy the points from the voxel map to the frame
             for (const auto& pair : voxel_map) {
-                frame.push_back(pair.second);
+                frame.push_back(pair.second); // pair.second is the Point3D
             }
+            // Shrink the frame to fit the actual size (optimize memory)
             frame.shrink_to_fit();
+            // Return after sequential processing
             return;
         }
 
-        // Store points with their voxel coordinates
+        // Step 4: Parallel processing for large inputs (frame size >= sequential_threshold)
+        // Define a structure to hold a voxel and its corresponding point
         struct VoxelPoint {
-            Voxel voxel;
-            Point3D point;
+            Voxel voxel;    // Voxel coordinates
+            Point3D point;  // Corresponding 3D point
         };
 
-        // Parallel processing for large inputs
-        // Set TBB thread limit
-        // Reserve space to reduce reallocation (estimate based on typical downsampling)
-        // Parallel computation of voxel coordinates
+        // Step 5: Set up TBB thread limit for parallel processing
+        // Limit the number of threads to num_threads
         tbb::global_control gc(tbb::global_control::max_allowed_parallelism, num_threads);
+
+        // Step 6: Create a concurrent vector to store voxel-point pairs
+        // tbb::concurrent_vector is thread-safe for parallel insertions
         tbb::concurrent_vector<VoxelPoint> voxel_points;
+        // Reserve space to reduce reallocation (estimate: ~1/2 of input size)
         voxel_points.reserve(frame.size() / 2);
+
+        // Step 7: Parallel computation of voxel coordinates
+        // Use TBB's parallel_for to process the frame in parallel
+        // blocked_range divides the range [0, frame.size()) into chunks
+        // sequential_threshold is used as the grain size for load balancing
         tbb::parallel_for(tbb::blocked_range<size_t>(0, frame.size(), sequential_threshold),
             [&](const tbb::blocked_range<size_t>& range) {
+                // Iterate over the assigned range of indices
                 for (size_t i = range.begin(); i != range.end(); ++i) {
+                    // Get the 3D coordinates of the current point
                     const auto& pt = frame[i].pt;
+                    // Compute the voxel coordinates for the point
                     Voxel voxel = Voxel::Coordinates(pt, size_voxel);
+                    // Store the voxel and point in the concurrent vector
                     voxel_points.push_back({voxel, frame[i]});
                 }
             });
 
-        // Sequentially build VoxelMap to select one point per voxel
+        // Step 8: Sequentially build the voxel map from the voxel-point pairs
+        // Create a voxel map to store one point per voxel
         VoxelMap voxel_map;
-        voxel_map.reserve(voxel_points.size()); // Pre-allocate based on concurrent vector size
+        // Reserve space based on the size of the concurrent vector
+        voxel_map.reserve(voxel_points.size());
+        // Iterate through all voxel-point pairs
         for (const auto& vp : voxel_points) {
+            // Insert the point into the voxel map if the voxel is not already occupied
             voxel_map.try_emplace(vp.voxel, vp.point);
         }
 
-        // Rebuild frame with downsampled points
+        // Step 9: Rebuild the frame with downsampled points
+        // Clear the input frame
         frame.clear();
+        // Reserve space for the downsampled points
         frame.reserve(voxel_map.size());
+        // Copy the points from the voxel map to the frame
         for (const auto& pair : voxel_map) {
-            frame.push_back(pair.second);
+            frame.push_back(pair.second); // pair.second is the Point3D
         }
+        // Shrink the frame to fit the actual size (optimize memory)
         frame.shrink_to_fit();
     }
 
@@ -83,19 +121,52 @@ namespace  stateestimate{
     // grid_sampling
     // ########################################################################
 
-    void lidarinertialodom::grid_sampling(const std::vector<Point3D>& frame, std::vector<Point3D>& keypoints, double size_voxel_subsampling, int num_threads) {
+    void lidarinertialodom::grid_sampling(const std::vector<Point3D>& frame, std::vector<Point3D>& keypoints, 
+                                     double size_voxel_subsampling, int num_threads, int sequential_threshold) {
 
+        // Step 1: Clear the output keypoints vector to ensure it starts empty
+        // This prevents appending new points to any existing data
         keypoints.clear();
+
+        // Step 2: Create a temporary vector to hold a copy of the input frame
+        // frame_sub is used to avoid modifying the input frame (which is const)
         std::vector<Point3D> frame_sub;
+
+        // Step 3: Resize frame_sub to match the size of the input frame
+        // This pre-allocates memory for efficiency
         frame_sub.resize(frame.size());
-        for (int i = 0; i < (int)frame_sub.size(); i++) {frame_sub[i] = frame[i];}
-        sub_sample_frame(frame_sub, size_voxel_subsampling, num_threads);
+
+        // Step 4: Copy all points from the input frame to frame_sub
+        // A simple loop is used to perform the copy
+        for (int i = 0; i < (int)frame_sub.size(); i++) {
+            frame_sub[i] = frame[i];
+        }
+
+        // Step 5: Apply voxel grid subsampling to frame_sub
+        // Calls sub_sample_frame to reduce the number of points by keeping one point per voxel
+        // Modifies frame_sub in-place, using the provided voxel size, thread count, and threshold
+        sub_sample_frame(frame_sub, size_voxel_subsampling, num_threads, sequential_threshold);
+
+        // Step 6: Reserve space in keypoints to avoid reallocations
+        // Uses the size of the downsampled frame_sub to estimate the required capacity
         keypoints.reserve(frame_sub.size());
-        std::transform(frame_sub.begin(), frame_sub.end(), std::back_inserter(keypoints), [](const auto c) { return c; });
+
+        // Step 7: Copy the downsampled points from frame_sub to keypoints
+        // Uses std::transform with a lambda to copy each point (identity transformation)
+        // std::back_inserter appends points to keypoints
+        std::transform(frame_sub.begin(), frame_sub.end(), std::back_inserter(keypoints), 
+                    [](const auto c) { return c; });
+
+        // Step 8: Optimize memory usage of keypoints
+        // shrink_to_fit reduces the capacity to match the actual size of keypoints
         keypoints.shrink_to_fit();
     }
 
-    lidarinertialodom::Neighborhood lidarinertialodom::compute_neighborhood_distribution(const ArrayVector3d& points, int num_threads) {
+    // ########################################################################
+    // compute_neighborhood_distribution
+    // ########################################################################
+
+    lidarinertialodom::Neighborhood lidarinertialodom::compute_neighborhood_distribution(const ArrayVector3d& points, int num_threads, int sequential_threshold) {
 
         Neighborhood neighborhood;
 
@@ -118,7 +189,6 @@ namespace  stateestimate{
         Eigen::Vector3d barycenter = Eigen::Vector3d::Zero();
         Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
         const size_t point_count = points.size();
-        constexpr size_t sequential_threshold = 100; // Tune based on hardware
 
         if (point_count < sequential_threshold) {
             // Sequential for small inputs
@@ -189,11 +259,217 @@ namespace  stateestimate{
     }
 
     // ########################################################################
+    // compute_neighborhood_distribution
+    // ########################################################################
+
+    static lidarinertialodom::Options parse_json_options(const std::string& json_path) {
+
+        std::ifstream file(json_path);
+        if (!file.is_open()) {
+            throw std::runtime_error("Failed to open JSON file: " + json_path);
+        }
+
+        nlohmann::json json_data;
+        try {
+            file >> json_data;
+        } catch (const nlohmann::json::parse_error& e) {
+            throw std::runtime_error("JSON parse error in " + json_path + ": " + e.what());
+        }
+
+        lidarinertialodom::Options parsed_options;
+
+        if (!json_data.is_object()) {
+            throw std::runtime_error("JSON data must be an object");
+        }
+
+        try {
+            // Parse odometry_options object
+            if (!json_data.contains("odometry_options") || !json_data["odometry_options"].is_object()) {
+                throw std::runtime_error("Missing or invalid 'odometry_options' object");
+            }
+            const auto& odometry_options = json_data["odometry_options"];
+            
+            // ########################################################################
+            // Base Odometry::Options
+            if (odometry_options.contains("init_num_frames")) parsed_options.init_num_frames = odometry_options["init_num_frames"].get<int>();
+            if (odometry_options.contains("init_voxel_size")) parsed_options.init_voxel_size = odometry_options["init_voxel_size"].get<double>();
+            if (odometry_options.contains("voxel_size")) parsed_options.voxel_size = odometry_options["voxel_size"].get<double>();
+            if (odometry_options.contains("init_sample_voxel_size")) parsed_options.init_sample_voxel_size = odometry_options["init_sample_voxel_size"].get<double>();
+            if (odometry_options.contains("sample_voxel_size")) parsed_options.sample_voxel_size = odometry_options["sample_voxel_size"].get<double>();
+
+            // ########################################################################
+            if (odometry_options.contains("size_voxel_map")) parsed_options.size_voxel_map = odometry_options["size_voxel_map"].get<double>();
+            if (odometry_options.contains("min_distance_points")) parsed_options.min_distance_points = odometry_options["min_distance_points"].get<double>();
+            if (odometry_options.contains("max_num_points_in_voxel")) parsed_options.max_num_points_in_voxel = odometry_options["max_num_points_in_voxel"].get<int>();
+            if (odometry_options.contains("max_distance")) parsed_options.max_distance = odometry_options["max_distance"].get<double>();
+            if (odometry_options.contains("min_number_neighbors")) parsed_options.min_number_neighbors = odometry_options["min_number_neighbors"].get<int>();
+            if (odometry_options.contains("max_number_neighbors")) parsed_options.max_number_neighbors = odometry_options["max_number_neighbors"].get<int>();
+            if (odometry_options.contains("voxel_lifetime")) parsed_options.voxel_lifetime = odometry_options["voxel_lifetime"].get<int>();
+
+            // ########################################################################
+            if (odometry_options.contains("num_iters_icp")) parsed_options.num_iters_icp = odometry_options["num_iters_icp"].get<int>();
+            if (odometry_options.contains("threshold_orientation_norm")) parsed_options.threshold_orientation_norm = odometry_options["threshold_orientation_norm"].get<double>();
+            if (odometry_options.contains("threshold_translation_norm")) parsed_options.threshold_translation_norm = odometry_options["threshold_translation_norm"].get<double>();
+            if (odometry_options.contains("min_number_keypoints")) parsed_options.min_number_keypoints = odometry_options["min_number_keypoints"].get<int>();
+
+            // ########################################################################
+            if (odometry_options.contains("debug_print")) parsed_options.debug_print = odometry_options["debug_print"].get<bool>();
+            if (odometry_options.contains("debug_path")) parsed_options.debug_path = odometry_options["debug_path"].get<std::string>();
+
+            // ########################################################################
+            // lidarinertialodom::Options
+            if (odometry_options.contains("T_sr") && odometry_options["T_sr"].is_array() && odometry_options["T_sr"].size() == 16) {
+                for (int i = 0; i < 4; ++i) {
+                    for (int j = 0; j < 4; ++j) {
+                        parsed_options.T_sr(i, j) = odometry_options["T_sr"][i * 4 + j].get<double>();
+                    }
+                }
+            }
+            if (odometry_options.contains("qc_diag") && odometry_options["qc_diag"].is_array() && odometry_options["qc_diag"].size() == 6) {
+                for (int i = 0; i < 6; ++i) {
+                    parsed_options.qc_diag(i) = odometry_options["qc_diag"][i].get<double>();
+                }
+            }
+            if (odometry_options.contains("ad_diag") && odometry_options["ad_diag"].is_array() && odometry_options["ad_diag"].size() == 6) {
+                for (int i = 0; i < 6; ++i) {
+                    parsed_options.ad_diag(i) = odometry_options["ad_diag"][i].get<double>();
+                }
+            }
+            if (odometry_options.contains("num_extra_states")) parsed_options.num_extra_states = odometry_options["num_extra_states"].get<int>();
+
+            // ########################################################################
+            if (odometry_options.contains("power_planarity")) parsed_options.power_planarity = odometry_options["power_planarity"].get<double>();
+            if (odometry_options.contains("p2p_max_dist")) parsed_options.p2p_max_dist = odometry_options["p2p_max_dist"].get<double>();
+            if (odometry_options.contains("p2p_loss_func")) {
+                std::string loss_func = odometry_options["p2p_loss_func"].get<std::string>();
+                if (loss_func == "L2") parsed_options.p2p_loss_func = lidarinertialodom::LOSS_FUNC::L2;
+                else if (loss_func == "DCS") parsed_options.p2p_loss_func = lidarinertialodom::LOSS_FUNC::DCS;
+                else if (loss_func == "CAUCHY") parsed_options.p2p_loss_func = lidarinertialodom::LOSS_FUNC::CAUCHY;
+                else if (loss_func == "GM") parsed_options.p2p_loss_func = lidarinertialodom::LOSS_FUNC::GM;
+                else throw std::runtime_error("Invalid p2p_loss_func: " + loss_func);
+            }
+            if (odometry_options.contains("p2p_loss_sigma")) parsed_options.p2p_loss_sigma = odometry_options["p2p_loss_sigma"].get<double>();
+
+            // ########################################################################
+            if (odometry_options.contains("use_rv")) parsed_options.use_rv = odometry_options["use_rv"].get<bool>();
+            if (odometry_options.contains("merge_p2p_rv")) parsed_options.merge_p2p_rv = odometry_options["merge_p2p_rv"].get<bool>();
+            if (odometry_options.contains("rv_max_error")) parsed_options.rv_max_error = odometry_options["rv_max_error"].get<double>();
+            if (odometry_options.contains("rv_loss_func")) {
+                std::string loss_func = odometry_options["rv_loss_func"].get<std::string>();
+                if (loss_func == "L2") parsed_options.rv_loss_func = lidarinertialodom::LOSS_FUNC::L2;
+                else if (loss_func == "DCS") parsed_options.rv_loss_func = lidarinertialodom::LOSS_FUNC::DCS;
+                else if (loss_func == "CAUCHY") parsed_options.rv_loss_func = lidarinertialodom::LOSS_FUNC::CAUCHY;
+                else if (loss_func == "GM") parsed_options.rv_loss_func = lidarinertialodom::LOSS_FUNC::GM;
+                else throw std::runtime_error("Invalid rv_loss_func: " + loss_func);
+            }
+            if (odometry_options.contains("rv_cov_inv")) parsed_options.rv_cov_inv = odometry_options["rv_cov_inv"].get<double>();
+            if (odometry_options.contains("rv_loss_threshold")) parsed_options.rv_loss_threshold = odometry_options["rv_loss_threshold"].get<double>();
+
+            // ########################################################################
+            if (odometry_options.contains("verbose")) parsed_options.verbose = odometry_options["verbose"].get<bool>();
+            if (odometry_options.contains("max_iterations")) parsed_options.max_iterations = odometry_options["max_iterations"].get<int>();
+            if (odometry_options.contains("sequential_threshold")) parsed_options.sequential_threshold = odometry_options["sequential_threshold"].get<int>();
+            if (odometry_options.contains("num_threads")) parsed_options.num_threads = odometry_options["num_threads"].get<unsigned int>();
+
+            // ########################################################################
+            if (odometry_options.contains("delay_adding_points")) parsed_options.delay_adding_points = odometry_options["delay_adding_points"].get<int>();
+            if (odometry_options.contains("use_final_state_value")) parsed_options.use_final_state_value = odometry_options["use_final_state_value"].get<bool>();
+
+            // ########################################################################
+            if (odometry_options.contains("gravity")) parsed_options.gravity = odometry_options["gravity"].get<double>();
+            if (odometry_options.contains("r_imu_acc") && odometry_options["r_imu_acc"].is_array() && odometry_options["r_imu_acc"].size() == 3) {
+                for (int i = 0; i < 3; ++i) {
+                    parsed_options.r_imu_acc(i) = odometry_options["r_imu_acc"][i].get<double>();
+                }
+            }
+            if (odometry_options.contains("r_imu_ang") && odometry_options["r_imu_ang"].is_array() && odometry_options["r_imu_ang"].size() == 3) {
+                for (int i = 0; i < 3; ++i) {
+                    parsed_options.r_imu_ang(i) = odometry_options["r_imu_ang"][i].get<double>();
+                }
+            }
+            if (odometry_options.contains("r_pose") && odometry_options["r_pose"].is_array() && odometry_options["r_pose"].size() == 6) {
+                for (int i = 0; i < 6; ++i) {
+                    parsed_options.r_pose(i) = odometry_options["r_pose"][i].get<double>();
+                }
+            }
+            if (odometry_options.contains("p0_bias_accel") && odometry_options["p0_bias_accel"].is_array() && odometry_options["p0_bias_accel"].size() == 3) {
+                for (int i = 0; i < 3; ++i) {
+                    parsed_options.p0_bias_accel(i) = odometry_options["p0_bias_accel"][i].get<double>();
+                }
+            }
+            if (odometry_options.contains("pk_bias_accel")) parsed_options.pk_bias_accel = odometry_options["pk_bias_accel"].get<double>();
+            if (odometry_options.contains("q_bias_accel") && odometry_options["q_bias_accel"].is_array() && odometry_options["q_bias_accel"].size() == 3) {
+                for (int i = 0; i < 3; ++i) {
+                    parsed_options.q_bias_accel(i) = odometry_options["q_bias_accel"][i].get<double>();
+                }
+            }
+            if (odometry_options.contains("p0_bias_gyro")) parsed_options.p0_bias_gyro = odometry_options["p0_bias_gyro"].get<double>();
+            if (odometry_options.contains("pk_bias_gyro")) parsed_options.pk_bias_gyro = odometry_options["pk_bias_gyro"].get<double>();
+            if (odometry_options.contains("q_bias_gyro")) parsed_options.q_bias_gyro = odometry_options["q_bias_gyro"].get<double>();
+            if (odometry_options.contains("use_imu")) parsed_options.use_imu = odometry_options["use_imu"].get<bool>();
+            if (odometry_options.contains("T_mi_init_only")) parsed_options.T_mi_init_only = odometry_options["T_mi_init_only"].get<bool>();
+            if (odometry_options.contains("use_T_mi_gt")) parsed_options.use_T_mi_gt = odometry_options["use_T_mi_gt"].get<bool>();
+
+            // ########################################################################
+            if (odometry_options.contains("qg_diag") && odometry_options["qg_diag"].is_array() && odometry_options["qg_diag"].size() == 6) {
+                for (int i = 0; i < 6; ++i) {
+                    parsed_options.qg_diag(i) = odometry_options["qg_diag"][i].get<double>();
+                }
+            }
+            if (odometry_options.contains("p0_pose") && odometry_options["p0_pose"].is_array() && odometry_options["p0_pose"].size() == 6) {
+                for (int i = 0; i < 6; ++i) {
+                    parsed_options.p0_pose(i) = odometry_options["p0_pose"][i].get<double>();
+                }
+            }
+            if (odometry_options.contains("p0_vel") && odometry_options["p0_vel"].is_array() && odometry_options["p0_vel"].size() == 6) {
+                for (int i = 0; i < 6; ++i) {
+                    parsed_options.p0_vel(i) = odometry_options["p0_vel"][i].get<double>();
+                }
+            }
+            if (odometry_options.contains("p0_accel") && odometry_options["p0_accel"].is_array() && odometry_options["p0_accel"].size() == 6) {
+                for (int i = 0; i < 6; ++i) {
+                    parsed_options.p0_accel(i) = odometry_options["p0_accel"][i].get<double>();
+                }
+            }
+            if (odometry_options.contains("T_mi_init_cov") && odometry_options["T_mi_init_cov"].is_array() && odometry_options["T_mi_init_cov"].size() == 6) {
+                for (int i = 0; i < 6; ++i) {
+                    parsed_options.T_mi_init_cov(i) = odometry_options["T_mi_init_cov"][i].get<double>();
+                }
+            }
+            if (odometry_options.contains("T_mi_prior_cov") && odometry_options["T_mi_prior_cov"].is_array() && odometry_options["T_mi_prior_cov"].size() == 6) {
+                for (int i = 0; i < 6; ++i) {
+                    parsed_options.T_mi_prior_cov(i) = odometry_options["T_mi_prior_cov"][i].get<double>();
+                }
+            }
+            if (odometry_options.contains("xi_ig") && odometry_options["xi_ig"].is_array() && odometry_options["xi_ig"].size() == 6) {
+                for (int i = 0; i < 6; ++i) {
+                    parsed_options.xi_ig(i) = odometry_options["xi_ig"][i].get<double>();
+                }
+            }
+            if (odometry_options.contains("use_T_mi_prior_after_init")) parsed_options.use_T_mi_prior_after_init = odometry_options["use_T_mi_prior_after_init"].get<bool>();
+            if (odometry_options.contains("use_bias_prior_after_init")) parsed_options.use_bias_prior_after_init = odometry_options["use_bias_prior_after_init"].get<bool>();
+            if (odometry_options.contains("acc_loss_func")) parsed_options.acc_loss_func = odometry_options["acc_loss_func"].get<std::string>();
+            if (odometry_options.contains("acc_loss_sigma")) parsed_options.acc_loss_sigma = odometry_options["acc_loss_sigma"].get<double>();
+            if (odometry_options.contains("gyro_loss_func")) parsed_options.gyro_loss_func = odometry_options["gyro_loss_func"].get<std::string>();
+            if (odometry_options.contains("gyro_loss_sigma")) parsed_options.gyro_loss_sigma = odometry_options["gyro_loss_sigma"].get<double>();
+
+            // ########################################################################
+            if (odometry_options.contains("filter_lifetimes")) parsed_options.filter_lifetimes = odometry_options["filter_lifetimes"].get<bool>();
+            if (odometry_options.contains("break_icp_early")) parsed_options.break_icp_early = odometry_options["break_icp_early"].get<bool>();
+            if (odometry_options.contains("use_line_search")) parsed_options.use_line_search = odometry_options["use_line_search"].get<bool>();
+            if (odometry_options.contains("use_accel")) parsed_options.use_accel = odometry_options["use_accel"].get<bool>();
+        } catch (const nlohmann::json::exception& e) {
+            throw std::runtime_error("JSON parsing error in metadata: " + std::string(e.what()));
+        }
+        return parsed_options;
+    }
+
+    // ########################################################################
     // lidarinertialodom constructor
     // ########################################################################
 
-    lidarinertialodom::lidarinertialodom(const Options &options) : Odometry(options), options_(options) {
-        // iniitalize slam vars
+    lidarinertialodom::lidarinertialodom(const std::string& json_path) : Odometry(parse_json_options(json_path)), options_(parse_json_options(json_path)) {
+        // Initialize SLAM variables
         T_sr_var_ = finalicp::se3::SE3StateVar::MakeShared(math::se3::Transformation(options_.T_sr));
         T_sr_var_->locked() = true;
 
@@ -337,7 +613,7 @@ namespace  stateestimate{
     auto lidarinertialodom::registerFrame(const DataFrame &const_frame) -> RegistrationSummary {
         RegistrationSummary summary;
 
-        // Timers (only if debug_print is true)
+        // Initialize timers for performance debugging if enabled
         std::vector<std::pair<std::string, std::unique_ptr<finalicp::Stopwatch<>>>> timer;
         if (options_.debug_print) {
             timer.emplace_back("initialization ..................... ", std::make_unique<finalicp::Stopwatch<>>(false));
@@ -346,7 +622,8 @@ namespace  stateestimate{
             timer.emplace_back("pointCorrection .................... ", std::make_unique<finalicp::Stopwatch<>>(false));
         }
 
-        // Validate input
+        // Step 1: Validate input point cloud
+        // Check if the input point cloud is empty; return failure if so
         if (const_frame.pointcloud.empty()) {
             summary.success = false;
             if (options_.debug_print && !timer.empty()) {
@@ -358,38 +635,45 @@ namespace  stateestimate{
             return summary;
         }
 
-        // Add new frame
+        // Step 2: Add new frame to trajectory
+        // Create a new entry in the trajectory vector for the current frame
         int index_frame = trajectory_.size();
         trajectory_.emplace_back();
 
-        // Initialize
-        initializeTimestamp(index_frame, const_frame);
-        initializeMotion(index_frame);
+        // Step 3: Initialize frame metadata
+        // Set up timestamp and motion data for the new frame
+        initializeTimestamp(index_frame, const_frame);                                  //####!!! 1
+        initializeMotion(index_frame);                                                  //####!!! 2
 
-        // Process point cloud
+        // Step 4: Process input point cloud
+        // Convert and prepare the point cloud for registration
         if (!timer.empty()) timer[0].second->start();
-        auto frame = initializeFrame(index_frame, const_frame.pointcloud);
+        auto frame = initializeFrame(index_frame, const_frame.pointcloud);              //####!!! 3
         if (!timer.empty()) timer[0].second->stop();
 
-        // Process frame
+        // Step 5: Process frame based on frame index
+        // Handle first frame initialization or subsequent frame registration
         std::vector<Point3D> keypoints;
         if (index_frame > 0) {
+            // Determine voxel size for downsampling based on frame index
             double sample_voxel_size = index_frame < options_.init_num_frames
                 ? options_.init_sample_voxel_size
                 : options_.sample_voxel_size;
 
-            // Downsample
+            // Step 5a: Downsample point cloud
+            // Reduce point cloud density using grid sampling for efficiency
             if (!timer.empty()) timer[1].second->start();
-            grid_sampling(frame, keypoints, sample_voxel_size, options_.num_threads);
+            grid_sampling(frame, keypoints, sample_voxel_size, options_.num_threads, options_.sequential_threshold);   //####!!! 4
             if (!timer.empty()) timer[1].second->stop();
 
-            // ICP
+            // Step 5b: Perform Iterative Closest Point (ICP) registration
+            // Align current frame with previous frames using IMU and pose data
             const auto& imu_data_vec = const_frame.imu_data_vec;
             const auto& pose_data_vec = const_frame.pose_data_vec;
             if (!timer.empty()) timer[1].second->start();
-            summary.success = icp(index_frame, keypoints, imu_data_vec, pose_data_vec);
+            summary.success = icp(index_frame, keypoints, imu_data_vec, pose_data_vec); //####!!! 5
             if (!timer.empty()) timer[1].second->stop();
-            summary.keypoints = std::move(keypoints); // Move instead of copy
+            summary.keypoints = std::move(keypoints);
             if (!summary.success) {
                 if (options_.debug_print && !timer.empty()) {
                     std::cerr << "Timers:\n";
@@ -400,6 +684,8 @@ namespace  stateestimate{
                 return summary;
             }
         } else {
+            // Step 5c: Initialize first frame
+            // Set up initial state and transformations for the trajectory start
             using namespace finalicp;
             using namespace finalicp::se3;
             using namespace finalicp::vspace;
@@ -407,7 +693,7 @@ namespace  stateestimate{
 
             if (!timer.empty()) timer[0].second->start();
 
-            // Initial state
+            // Define initial transformations and velocities
             math::se3::Transformation T_rm;
             math::se3::Transformation T_mi;
             math::se3::Transformation T_sr(options_.T_sr);
@@ -415,7 +701,7 @@ namespace  stateestimate{
             Eigen::Matrix<double, 6, 1> dw_mr_inr = Eigen::Matrix<double, 6, 1>::Zero();
             Eigen::Matrix<double, 6, 1> b_zero = Eigen::Matrix<double, 6, 1>::Zero();
 
-            // Initialize frame (beginning of trajectory)
+            // Initialize trajectory variables for the beginning of the frame
             const double begin_time = trajectory_[index_frame].begin_timestamp;
             if (!std::isfinite(begin_time)) {
                 throw std::runtime_error("Non-finite begin_timestamp for frame " + std::to_string(index_frame));
@@ -429,7 +715,7 @@ namespace  stateestimate{
             trajectory_vars_.emplace_back(begin_slam_time, std::move(begin_T_rm_var), std::move(begin_w_mr_inr_var),
                                         std::move(begin_dw_mr_inr_var), std::move(begin_imu_biases), std::move(begin_T_mi_var));
 
-            // End of current scan
+            // Initialize trajectory variables for the end of the frame
             const double end_time = trajectory_[index_frame].end_timestamp;
             if (!std::isfinite(end_time)) {
                 throw std::runtime_error("Non-finite end_timestamp for frame " + std::to_string(index_frame));
@@ -443,7 +729,8 @@ namespace  stateestimate{
             trajectory_vars_.emplace_back(end_slam_time, std::move(end_T_rm_var), std::move(end_w_mr_inr_var),
                                         std::move(end_dw_mr_inr_var), std::move(end_imu_biases), std::move(end_T_mi_var));
 
-            // Gravity alignment
+            // Step 5d: Align gravity using IMU data
+            // Ensure proper orientation by aligning with gravity vector
             if (const_frame.imu_data_vec.empty()) {
                 summary.success = false;
                 if (options_.debug_print && !timer.empty()) {
@@ -464,7 +751,8 @@ namespace  stateestimate{
 
             to_marginalize_ = 1;
 
-            // Initialize covariances
+            // Step 5e: Initialize covariance matrices
+            // Set initial uncertainties for pose, velocity, and acceleration
             Eigen::Matrix<double, 6, 6> P0_pose = options_.p0_pose.asDiagonal();
             Eigen::Matrix<double, 6, 6> P0_vel = options_.p0_vel.asDiagonal();
             Eigen::Matrix<double, 6, 6> P0_accel = options_.p0_accel.asDiagonal();
@@ -476,31 +764,35 @@ namespace  stateestimate{
             if (!timer.empty()) timer[0].second->stop();
         }
 
-        // Store points
-        trajectory_[index_frame].points = std::move(frame); // Move instead of copy
+        // Step 6: Store processed points
+        // Save the processed point cloud to the trajectory
+        trajectory_[index_frame].points = std::move(frame);
 
-        // Update map
+        // Step 7: Update the map
+        // Incorporate points into the global map, with optional delay
         if (!timer.empty()) timer[2].second->start();
         if (index_frame == 0) {
-            updateMap(index_frame, index_frame);
+            updateMap(index_frame, index_frame);                                        //####!!! 6
         } else if ((index_frame - options_.delay_adding_points) > 0) {
             updateMap(index_frame, index_frame - options_.delay_adding_points);
         }
         if (!timer.empty()) timer[2].second->stop();
 
-        // Correct all points
+        // Step 8: Correct point cloud positions
+        // Apply transformations to correct point positions based on trajectory
         if (!timer.empty()) timer[3].second->start();
 
-        // Validate poses
+        // Validate trajectory poses for correction
         const auto& traj = trajectory_[index_frame];
         if (!traj.begin_R.allFinite() || !traj.begin_t.allFinite() ||
             !traj.end_R.allFinite() || !traj.end_t.allFinite()) {
             throw std::runtime_error("Non-finite poses in point correction for frame " + std::to_string(index_frame));
         }
 
-        std::vector<Point3D> all_corrected_points = const_frame.pointcloud; // Copy unavoidable due to const DataFrame
-        if (all_corrected_points.size() < sequential_threshold) {
-            // Sequential correction with std::vector
+        std::vector<Point3D> all_corrected_points = const_frame.pointcloud;
+        if (all_corrected_points.size() < options_.sequential_threshold) {
+            // Step 8a: Sequential point correction
+            // Correct points using linear interpolation for small datasets
             auto q_begin = Eigen::Quaterniond(traj.begin_R);
             auto q_end = Eigen::Quaterniond(traj.end_R);
             const Eigen::Vector3d t_begin = traj.begin_t;
@@ -515,10 +807,11 @@ namespace  stateestimate{
                 point.pt = R * point.raw_pt + t;
             }
         } else {
-            // Parallel correction with tbb::concurrent_vector
+            // Step 8b: Parallel point correction
+            // Use TBB for parallel processing of large point clouds
             tbb::concurrent_vector<Point3D> concurrent_points(const_frame.pointcloud.begin(), const_frame.pointcloud.end());
             tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
-            tbb::parallel_for(tbb::blocked_range<size_t>(0, concurrent_points.size(), sequential_threshold),
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, concurrent_points.size(), options_.sequential_threshold),
                 [&](const tbb::blocked_range<size_t>& range) {
                     auto q_begin = Eigen::Quaterniond(traj.begin_R);
                     auto q_end = Eigen::Quaterniond(traj.end_R);
@@ -536,18 +829,20 @@ namespace  stateestimate{
                     }
                 });
 
-            // Transfer to std::vector
+            // Transfer corrected points back to std::vector
             all_corrected_points.assign(concurrent_points.begin(), concurrent_points.end());
         }
-        summary.all_corrected_points = std::move(all_corrected_points); // Move to summary
+        summary.all_corrected_points = std::move(all_corrected_points);
         if (!timer.empty()) timer[3].second->stop();
 
-        // Set output
-        summary.corrected_points = summary.keypoints; // Already moved to keypoints
+        // Step 9: Prepare output summary
+        // Set corrected points, rotation, and translation for output
+        summary.corrected_points = summary.keypoints;
         summary.R_ms = traj.end_R;
         summary.t_ms = traj.end_t;
 
-        // Output timers to cerr if debug_print
+        // Step 10: Output debug timers
+        // Print timing information if debug mode is enabled
         if (options_.debug_print && !timer.empty()) {
             std::cerr << "Timers:\n";
             for (const auto& t : timer) {
@@ -580,7 +875,7 @@ namespace  stateestimate{
         double min_timestamp = std::numeric_limits<double>::max();
         double max_timestamp = std::numeric_limits<double>::min();
 
-        if (const_frame.pointcloud.size() < sequential_threshold) {
+        if (const_frame.pointcloud.size() < options_.sequential_threshold) {
             // Sequential processing
             for (const auto& point : const_frame.pointcloud) {
                 min_timestamp = std::min(min_timestamp, point.timestamp);
@@ -590,7 +885,7 @@ namespace  stateestimate{
             // Parallel processing with TBB
             tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
             auto result = tbb::parallel_reduce(
-                tbb::blocked_range<size_t>(0, const_frame.pointcloud.size(), sequential_threshold),
+                tbb::blocked_range<size_t>(0, const_frame.pointcloud.size(), options_.sequential_threshold),
                 std::pair<double, double>{std::numeric_limits<double>::max(), std::numeric_limits<double>::min()},
                 [&](const tbb::blocked_range<size_t>& range, std::pair<double, double> local) {
                     for (size_t i = range.begin(); i != range.end(); ++i) {
@@ -703,7 +998,7 @@ namespace  stateestimate{
         const double sample_size = index_frame < options_.init_num_frames ? options_.init_voxel_size : options_.voxel_size;
 
         // Subsample
-        sub_sample_frame(frame, sample_size, options_.num_threads);
+        sub_sample_frame(frame, sample_size, options_.num_threads, options_.sequential_threshold);
 
         // Shuffle points to avoid bias
         std::mt19937_64 g(42); // Fixed seed for reproducibility
@@ -721,7 +1016,7 @@ namespace  stateestimate{
         const Eigen::Vector3d t_begin = traj.begin_t;
         const Eigen::Vector3d t_end = traj.end_t;
 
-        if (frame.size() < sequential_threshold) {
+        if (frame.size() < options_.sequential_threshold) {
             // Sequential processing
             for (auto& point : frame) {
                 const double alpha = point.alpha_timestamp;
@@ -735,7 +1030,7 @@ namespace  stateestimate{
         } else {
             // Parallel processing with TBB
             tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
-            tbb::parallel_for(tbb::blocked_range<size_t>(0, frame.size(), sequential_threshold),
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, frame.size(), options_.sequential_threshold),
                 [&](const tbb::blocked_range<size_t>& range) {
                     for (size_t i = range.begin(); i != range.end(); ++i) {
                         auto& point = frame[i];
@@ -835,7 +1130,7 @@ namespace  stateestimate{
         }
 
         std::map<double, Eigen::Matrix4d> T_ms_cache_map;
-        if (unique_point_times.size() < sequential_threshold) {
+        if (unique_point_times.size() < options_.sequential_threshold) {
             // Sequential pose interpolation
             for (const auto& ts : unique_point_times) {
                 const auto T_rm_intp_eval = update_trajectory->getPoseInterpolator(finalicp::traj::Time(ts));
@@ -852,7 +1147,7 @@ namespace  stateestimate{
             // Parallel pose interpolation with TBB
             tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
             std::vector<Eigen::Matrix4d> T_ms_cache(unique_point_times.size());
-            tbb::parallel_for(tbb::blocked_range<size_t>(0, unique_point_times.size(), sequential_threshold),
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, unique_point_times.size(), options_.sequential_threshold),
                 [&](const tbb::blocked_range<size_t>& range) {
                     for (size_t jj = range.begin(); jj != range.end(); ++jj) {
                         const auto& ts = unique_point_times[jj];
@@ -875,7 +1170,7 @@ namespace  stateestimate{
         }
 
         // Apply transformations
-        if (frame.size() < sequential_threshold) {
+        if (frame.size() < options_.sequential_threshold) {
             // Sequential point transformation
             for (auto& point : frame) {
                 try {
@@ -888,7 +1183,7 @@ namespace  stateestimate{
         } else {
             // Parallel point transformation with TBB
             tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
-            tbb::parallel_for(tbb::blocked_range<size_t>(0, frame.size(), sequential_threshold),
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, frame.size(), options_.sequential_threshold),
                 [&](const tbb::blocked_range<size_t>& range) {
                     for (size_t i = range.begin(); i != range.end(); ++i) {
                         auto& point = frame[i];
@@ -961,7 +1256,7 @@ namespace  stateestimate{
         // Create cost terms
         std::vector<finalicp::BaseCostTerm::ConstPtr> cost_terms;
         cost_terms.reserve(imu_data_vec.size() + 1); // +1 for prior term
-        if (imu_data_vec.size() < sequential_threshold) {
+        if (imu_data_vec.size() < options_.sequential_threshold) {
             // Sequential cost term creation with std::vector
             cost_terms.resize(imu_data_vec.size());
             for (size_t i = 0; i < imu_data_vec.size(); ++i) {
@@ -977,7 +1272,7 @@ namespace  stateestimate{
             // Parallel cost term creation with tbb::concurrent_vector
             tbb::concurrent_vector<finalicp::BaseCostTerm::ConstPtr> concurrent_cost_terms(imu_data_vec.size());
             tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
-            tbb::parallel_for(tbb::blocked_range<size_t>(0, imu_data_vec.size(), sequential_threshold),
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, imu_data_vec.size(), options_.sequential_threshold),
                 [&](const tbb::blocked_range<size_t>& range) {
                     for (size_t i = range.begin(); i != range.end(); ++i) {
                         const auto& imu_data = imu_data_vec[i];
@@ -1720,7 +2015,7 @@ namespace  stateestimate{
         }
 
         // Compute interpolation matrices
-        if (unique_point_times.size() <= sequential_threshold) {
+        if (unique_point_times.size() <= options_.sequential_threshold) {
             // Sequential: Process timestamps one by one for small sizes
             for (size_t i = 0; i < unique_point_times.size(); ++i) {
                 const double time = unique_point_times[i];
@@ -1794,7 +2089,7 @@ namespace  stateestimate{
                 throw std::runtime_error("Empty unique_point_times in icp");
             }
 
-            if (unique_point_times.size() <= sequential_threshold) {
+            if (unique_point_times.size() <= options_.sequential_threshold) {
                 // Sequential: Process timestamps one by one for small sizes
                 for (size_t jj = 0; jj < unique_point_times.size(); ++jj) {
                     const double ts = unique_point_times[jj];
@@ -1823,7 +2118,7 @@ namespace  stateestimate{
                 // Parallel: Process timestamps concurrently with TBB
                 tbb::concurrent_hash_map<double, Eigen::Matrix4d> temp_cache_map;
                 tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, unique_point_times.size(), sequential_threshold),
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, unique_point_times.size(), options_.sequential_threshold),
                     [&](const tbb::blocked_range<size_t>& range) {
                         for (size_t jj = range.begin(); jj != range.end(); ++jj) {
                             const double ts = unique_point_times[jj];
@@ -1860,7 +2155,7 @@ namespace  stateestimate{
 
             // Step 37.2: Transform keypoints to the map frame
             // Applies cached pose matrices (T_mr) to transform raw keypoint coordinates to the map frame
-            if (keypoints.size() <= sequential_threshold) {
+            if (keypoints.size() <= options_.sequential_threshold) {
                 // Sequential: Transform keypoints one by one for small sizes
                 for (size_t jj = 0; jj < keypoints.size(); ++jj) {
                     auto& keypoint = keypoints[jj];
@@ -1881,7 +2176,7 @@ namespace  stateestimate{
                     temp_keypoints[jj] = keypoints[jj];
                 }
                 tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, keypoints.size(), sequential_threshold),
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, keypoints.size(), options_.sequential_threshold),
                     [&](const tbb::blocked_range<size_t>& range) {
                         for (size_t jj = range.begin(); jj != range.end(); ++jj) {
                             auto& keypoint = temp_keypoints[jj];
@@ -1943,7 +2238,7 @@ namespace  stateestimate{
             }
             const Eigen::Matrix4d T_rs_mat = options_.T_sr.inverse(); // Inverse sensor-to-robot transformation
 
-            if (keypoints.size() <= sequential_threshold) {
+            if (keypoints.size() <= options_.sequential_threshold) {
                 // Sequential: Transform keypoints one by one for small sizes
                 for (size_t i = 0; i < keypoints.size(); ++i) {
                     auto& keypoint = keypoints[i];
@@ -1960,7 +2255,7 @@ namespace  stateestimate{
                     temp_keypoints[i] = keypoints[i];
                 }
                 tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, keypoints.size(), sequential_threshold),
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, keypoints.size(), options_.sequential_threshold),
                     [&](const tbb::blocked_range<size_t>& range) {
                         for (size_t i = range.begin(); i != range.end(); ++i) {
                             auto& keypoint = temp_keypoints[i];
@@ -2060,7 +2355,7 @@ namespace  stateestimate{
                 meas_cost_terms.reserve(keypoints.size()); // Reserve for new cost terms
             #endif
 
-            if (keypoints.size() <= sequential_threshold) {
+            if (keypoints.size() <= options_.sequential_threshold) {
                 // Sequential: Process keypoints one by one for small sizes
                 for (size_t i = 0; i < keypoints.size(); ++i) {
                     const auto& keypoint = keypoints[i];
@@ -2075,7 +2370,7 @@ namespace  stateestimate{
                     }
 
                     // Compute neighborhood distribution (normals, planarity)
-                    auto neighborhood = compute_neighborhood_distribution(vector_neighbors, options_.num_threads);
+                    auto neighborhood = compute_neighborhood_distribution(vector_neighbors, options_.num_threads, options_.sequential_threshold);
                     if (!neighborhood.normal.allFinite()) {
                         throw std::runtime_error("Non-finite neighborhood normal at index: " + std::to_string(i));
                     }
@@ -2136,7 +2431,7 @@ namespace  stateestimate{
                 #endif
 
                 tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, keypoints.size(), sequential_threshold),
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, keypoints.size(), options_.sequential_threshold),
                     [&](const tbb::blocked_range<size_t>& range) {
                         for (size_t i = range.begin(); i != range.end(); ++i) {
                             const auto& keypoint = keypoints[i];
@@ -2152,7 +2447,7 @@ namespace  stateestimate{
                             }
 
                             // Compute neighborhood distribution (normals, planarity)
-                            auto neighborhood = compute_neighborhood_distribution(vector_neighbors,options_.num_threads);
+                            auto neighborhood = compute_neighborhood_distribution(vector_neighbors,options_.num_threads, options_.sequential_threshold);
                             if (!neighborhood.normal.allFinite()) {
                                 throw std::runtime_error("Non-finite neighborhood normal at index: " + std::to_string(i));
                             }

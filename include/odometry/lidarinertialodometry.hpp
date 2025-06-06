@@ -1,5 +1,7 @@
 #pragma once
 
+#include <nlohmann/json.hpp>
+
 #include <fstream>
 #include <set>
 
@@ -22,16 +24,16 @@ namespace stateestimate {
     class lidarinertialodom : public Odometry {
         public:
 
+            using Matrix18d = Eigen::Matrix<double, 18, 18>;
+
+            enum class LOSS_FUNC { L2, DCS, CAUCHY, GM };
+
             struct Neighborhood {
                 Eigen::Vector3d center = Eigen::Vector3d::Zero();
                 Eigen::Vector3d normal = Eigen::Vector3d::Zero();
                 Eigen::Matrix3d covariance = Eigen::Matrix3d::Identity();
                 double a2D = 1.0;  // Planarity coefficient
             };
-
-            using Matrix18d = Eigen::Matrix<double, 18, 18>;
-
-            enum class LOSS_FUNC { L2, DCS, CAUCHY, GM };
 
             struct Options : public Odometry::Options {
 
@@ -60,6 +62,7 @@ namespace stateestimate {
                 // optimization
                 bool verbose = false;
                 int max_iterations = 5;
+                int sequential_threshold = 100;
                 unsigned int num_threads = 4;
 
                 int delay_adding_points = 4;
@@ -101,9 +104,11 @@ namespace stateestimate {
                 bool use_accel = true;
             };
 
-            lidarinertialodom(const Options &options);
+            lidarinertialodom(const std::string& json_path);
 
             ~lidarinertialodom();
+
+            Options parse_metadata(const nlohmann::json& json_data);
 
             Trajectory trajectory() override;
 
@@ -113,13 +118,13 @@ namespace stateestimate {
 
             inline double AngularDistance(const Eigen::Matrix3d &rota, const Eigen::Matrix3d &rotb);
 
-            void sub_sample_frame(std::vector<Point3D>& frame, double size_voxel, int num_threads);
+            void sub_sample_frame(std::vector<Point3D>& frame, double size_voxel, int num_threads, int sequential_threshold);
 
-            void grid_sampling(const std::vector<Point3D>& frame, std::vector<Point3D>& keypoints, double size_voxel_subsampling, int num_threads);
+            void grid_sampling(const std::vector<Point3D>& frame, std::vector<Point3D>& keypoints, double size_voxel_subsampling, int num_threads, int sequential_threshold);
 
             void initializeTimestamp(int index_frame, const DataFrame &const_frame);
 
-            Neighborhood compute_neighborhood_distribution(const ArrayVector3d& points, int num_threads);
+            Neighborhood compute_neighborhood_distribution(const ArrayVector3d& points, int num_threads, int sequential_threshold);
 
             Eigen::Matrix<double, 6, 1> initialize_gravity(const std::vector<finalicp::IMUData> &imu_data_vec);
 
@@ -133,9 +138,7 @@ namespace stateestimate {
 
         private:
 
-            const size_t sequential_threshold = 100;
-
-            const Options options_;
+            Options options_;
 
             finalicp::se3::SE3StateVar::Ptr T_sr_var_ = nullptr;  // robot to sensor transformation as a slam variable
 
