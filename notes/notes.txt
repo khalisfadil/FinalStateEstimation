@@ -1,0 +1,21 @@
+Mittwoch, 2. Juli 2025 16:05
+    - does keypoints and const_frame is different?
+    - grid sampling provide initialized frame and keypoints.
+    - initializeFrame has sub_sample_frame >> output >> downsampling of given input frame.
+    - grid_sampling, copy the input frame and do sub_sample_frame, move(transform) downsampled frame into keypoints.
+    - NOTE: grid_sampling can be optimized. redundancies operations.
+    - initializeFrame has undo the motion distortion. it does shuffling of the points inside its frame.
+    - keypoints is a frame that has undergoes second downsampling operations.
+    - keypoints has undergoes motion undistortion. timestamp change? lookslike it retain its original timestamp
+    - TODO: dataalingment, make sure the IMU data is inside the lidar frame.
+    - I have calculated that every lidar frame, we have maximum of 5 IMU measurement.
+    - stop at step 34 in icp.
+--------------------------------------------------------------------------------------------------------------------------
+Donnerstag, 3. Juli 2025 08:56
+    - start from step 37 I remove runtime error to ease the code.
+    - stopped at step 45
+--------------------------------------------------------------------------------------------------------------------------
+Montag, 7. Juli 2025 12:06
+    - finished checking function icp
+    - added glog in icp
+    - finished recheck all function in lidarinertialodometry

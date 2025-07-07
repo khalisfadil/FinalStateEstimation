@@ -46,7 +46,7 @@ namespace  stateestimate{
                 int min_number_keypoints = 100;
 
                 bool debug_print = false;  // Whether to output debug information to std::cout
-                std::string debug_path = "/tmp/";
+                std::string debug_path = "../report/traj/";
             };
 
             static Odometry::Ptr Get(const std::string &odometry, const Options &options) {
@@ -78,7 +78,7 @@ namespace  stateestimate{
             virtual RegistrationSummary registerFrame(const DataFrame &frame) = 0;
 
         protected:
-            Trajectory trajectory_;
+            Trajectory trajectory_; //std::vector<TrajectoryFrame>; in trajectory.hpp
             Map map_;
 
         private:

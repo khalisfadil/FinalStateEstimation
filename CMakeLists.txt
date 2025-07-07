@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS ON) # Enables GNU extensions for gnu++20
 add_compile_options(-march=native -O3 -Wall -Wextra -pedantic)
 
 # Find dependencies
+find_package(glog REQUIRED)
 find_package(Eigen3 3.3.7 REQUIRED)
 find_package(TBB REQUIRED)
 find_package(GTest REQUIRED)
@@ -145,6 +146,7 @@ target_include_directories(${PROJECT_NAME}
 )
 target_link_libraries(${PROJECT_NAME}
     PUBLIC
+        glog::glog
         Eigen3::Eigen
         TBB::tbb
 )

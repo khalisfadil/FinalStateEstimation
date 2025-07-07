@@ -12,9 +12,15 @@ namespace stateestimate {
 
         public:
 
+            // -----------------------------------------------------------------------------
+
             Map() = default;
 
+            // -----------------------------------------------------------------------------
+
             explicit Map(int default_lifetime) : default_lifetime_(default_lifetime) {}
+
+            // -----------------------------------------------------------------------------
 
             [[nodiscard]] ArrayVector3d pointcloud() const {
                 ArrayVector3d points;
@@ -25,6 +31,8 @@ namespace stateestimate {
                 return points;
             }
 
+            // -----------------------------------------------------------------------------
+
             [[nodiscard]] size_t size() const {
                 size_t map_size = 0;
                 for (const auto& [_, block] : voxel_map_) {
@@ -32,6 +40,8 @@ namespace stateestimate {
                 }
                 return map_size;
             }
+
+            // -----------------------------------------------------------------------------
 
             void remove(const Eigen::Vector3d& location, double distance) {
                 std::vector<Voxel> voxels_to_erase;
@@ -47,6 +57,8 @@ namespace stateestimate {
                 }
             }
 
+            // -----------------------------------------------------------------------------
+
             void update_and_filter_lifetimes() {
                 std::vector<Voxel> voxels_to_erase;
                 for (VoxelHashMap::iterator it = voxel_map_.begin(); it != voxel_map_.end(); it++) {
@@ -57,13 +69,19 @@ namespace stateestimate {
                 for (auto &vox : voxels_to_erase) voxel_map_.erase(vox);
             }
 
+            // -----------------------------------------------------------------------------
+
             void setDefaultLifeTime(int default_lifetime) { 
                 default_lifetime_ = default_lifetime; 
             }
 
+            // -----------------------------------------------------------------------------
+
             void clear() { 
                 voxel_map_.clear(); 
             }
+
+            // -----------------------------------------------------------------------------
 
             void add(const std::vector<Point3D>& points, double voxel_size, int max_num_points_in_voxel,
                     double min_distance_points, int min_num_points = 0) {
@@ -72,6 +90,8 @@ namespace stateestimate {
                 }
             }
 
+            // -----------------------------------------------------------------------------
+
             void add(const ArrayVector3d& points, double voxel_size, int max_num_points_in_voxel, 
                     double min_distance_points) {
                 for (const auto& point : points) {
@@ -79,7 +99,10 @@ namespace stateestimate {
                 }
             }
 
-            void add(const Eigen::Vector3d &point, double voxel_size, int max_num_points_in_voxel, double min_distance_points, int min_num_points = 0) {
+            // -----------------------------------------------------------------------------
+
+            void add(const Eigen::Vector3d &point, double voxel_size, int max_num_points_in_voxel, 
+                                        double min_distance_points, int min_num_points = 0) {
                 int16_t kx = static_cast<int16_t>(point[0] / voxel_size);
                 int16_t ky = static_cast<int16_t>(point[1] / voxel_size);
                 int16_t kz = static_cast<int16_t>(point[2] / voxel_size);
@@ -118,7 +141,11 @@ namespace stateestimate {
                 }
             }
 
+            // -----------------------------------------------------------------------------
+
             using pair_distance_t = std::tuple<double, Eigen::Vector3d, Voxel>;
+
+            // -----------------------------------------------------------------------------
 
             struct Comparator {
                 bool operator()(const pair_distance_t& left, const pair_distance_t& right) const {
@@ -126,7 +153,11 @@ namespace stateestimate {
                 }
             };
 
+            // -----------------------------------------------------------------------------
+
             using priority_queue_t = std::priority_queue<pair_distance_t, std::vector<pair_distance_t>, Comparator>;
+
+            // -----------------------------------------------------------------------------
 
             ArrayVector3d searchNeighbors(const Eigen::Vector3d& point, int nb_voxels_visited, double size_voxel_map,
                                             int max_num_neighbors, int threshold_voxel_capacity = 1, std::vector<Voxel>* voxels = nullptr) {

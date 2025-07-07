@@ -18,6 +18,8 @@
 #include <tbb/global_control.h>
 #include <tbb/concurrent_vector.h>
 
+#include <glog/logging.h>
+
 #include <common/stopwatch.hpp>
 
 namespace stateestimate {
@@ -37,7 +39,7 @@ namespace stateestimate {
 
             struct Options : public Odometry::Options {
 
-                // sensor vehicle transformation
+                // vehicle Pose
                 Eigen::Matrix<double, 4, 4> T_sr = Eigen::Matrix<double, 4, 4>::Identity();
 
                 // trajectory
@@ -69,7 +71,7 @@ namespace stateestimate {
                 bool use_final_state_value = false;
 
                 // IMU
-                double gravity = -9.8042;
+                double gravity = 9.8042; // NED frame coordinate. z down
                 Eigen::Matrix<double, 3, 1> r_imu_acc = Eigen::Matrix<double, 3, 1>::Zero();
                 Eigen::Matrix<double, 3, 1> r_imu_ang = Eigen::Matrix<double, 3, 1>::Zero();
                 Eigen::Matrix<double, 6, 1> r_pose = Eigen::Matrix<double, 6, 1>::Zero();
