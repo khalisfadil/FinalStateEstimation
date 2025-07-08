@@ -263,10 +263,11 @@ namespace  stateestimate{
     // parse_json_options
     // ########################################################################
 
-    static lidarinertialodom::Options parse_json_options(const std::string& json_path) {
-
+    // Correctly define parse_json_options as a static member function
+    lidarinertialodom::Options lidarinertialodom::parse_json_options(const std::string& json_path) {
         std::ifstream file(json_path);
         if (!file.is_open()) {
+            LOG(ERROR) << "Failed to open JSON file: " << json_path;
             throw std::runtime_error("Failed to open JSON file: " + json_path);
         }
 
@@ -274,31 +275,31 @@ namespace  stateestimate{
         try {
             file >> json_data;
         } catch (const nlohmann::json::parse_error& e) {
+            LOG(ERROR) << "JSON parse error in " << json_path << ": " << e.what();
             throw std::runtime_error("JSON parse error in " + json_path + ": " + e.what());
         }
 
         lidarinertialodom::Options parsed_options;
 
         if (!json_data.is_object()) {
+            LOG(ERROR) << "JSON data must be an object";
             throw std::runtime_error("JSON data must be an object");
         }
 
         try {
             // Parse odometry_options object
             if (!json_data.contains("odometry_options") || !json_data["odometry_options"].is_object()) {
+                LOG(ERROR) << "Missing or invalid 'odometry_options' object";
                 throw std::runtime_error("Missing or invalid 'odometry_options' object");
             }
             const auto& odometry_options = json_data["odometry_options"];
             
-            // ########################################################################
             // Base Odometry::Options
             if (odometry_options.contains("init_num_frames")) parsed_options.init_num_frames = odometry_options["init_num_frames"].get<int>();
             if (odometry_options.contains("init_voxel_size")) parsed_options.init_voxel_size = odometry_options["init_voxel_size"].get<double>();
             if (odometry_options.contains("voxel_size")) parsed_options.voxel_size = odometry_options["voxel_size"].get<double>();
             if (odometry_options.contains("init_sample_voxel_size")) parsed_options.init_sample_voxel_size = odometry_options["init_sample_voxel_size"].get<double>();
             if (odometry_options.contains("sample_voxel_size")) parsed_options.sample_voxel_size = odometry_options["sample_voxel_size"].get<double>();
-
-            // ########################################################################
             if (odometry_options.contains("size_voxel_map")) parsed_options.size_voxel_map = odometry_options["size_voxel_map"].get<double>();
             if (odometry_options.contains("min_distance_points")) parsed_options.min_distance_points = odometry_options["min_distance_points"].get<double>();
             if (odometry_options.contains("max_num_points_in_voxel")) parsed_options.max_num_points_in_voxel = odometry_options["max_num_points_in_voxel"].get<int>();
@@ -306,18 +307,13 @@ namespace  stateestimate{
             if (odometry_options.contains("min_number_neighbors")) parsed_options.min_number_neighbors = odometry_options["min_number_neighbors"].get<int>();
             if (odometry_options.contains("max_number_neighbors")) parsed_options.max_number_neighbors = odometry_options["max_number_neighbors"].get<int>();
             if (odometry_options.contains("voxel_lifetime")) parsed_options.voxel_lifetime = odometry_options["voxel_lifetime"].get<int>();
-
-            // ########################################################################
             if (odometry_options.contains("num_iters_icp")) parsed_options.num_iters_icp = odometry_options["num_iters_icp"].get<int>();
             if (odometry_options.contains("threshold_orientation_norm")) parsed_options.threshold_orientation_norm = odometry_options["threshold_orientation_norm"].get<double>();
             if (odometry_options.contains("threshold_translation_norm")) parsed_options.threshold_translation_norm = odometry_options["threshold_translation_norm"].get<double>();
             if (odometry_options.contains("min_number_keypoints")) parsed_options.min_number_keypoints = odometry_options["min_number_keypoints"].get<int>();
-
-            // ########################################################################
             if (odometry_options.contains("debug_print")) parsed_options.debug_print = odometry_options["debug_print"].get<bool>();
             if (odometry_options.contains("debug_path")) parsed_options.debug_path = odometry_options["debug_path"].get<std::string>();
 
-            // ########################################################################
             // lidarinertialodom::Options
             if (odometry_options.contains("T_sr") && odometry_options["T_sr"].is_array() && odometry_options["T_sr"].size() == 16) {
                 for (int i = 0; i < 4; ++i) {
@@ -337,8 +333,6 @@ namespace  stateestimate{
                 }
             }
             if (odometry_options.contains("num_extra_states")) parsed_options.num_extra_states = odometry_options["num_extra_states"].get<int>();
-
-            // ########################################################################
             if (odometry_options.contains("power_planarity")) parsed_options.power_planarity = odometry_options["power_planarity"].get<double>();
             if (odometry_options.contains("p2p_max_dist")) parsed_options.p2p_max_dist = odometry_options["p2p_max_dist"].get<double>();
             if (odometry_options.contains("p2p_loss_func")) {
@@ -347,11 +341,12 @@ namespace  stateestimate{
                 else if (loss_func == "DCS") parsed_options.p2p_loss_func = lidarinertialodom::LOSS_FUNC::DCS;
                 else if (loss_func == "CAUCHY") parsed_options.p2p_loss_func = lidarinertialodom::LOSS_FUNC::CAUCHY;
                 else if (loss_func == "GM") parsed_options.p2p_loss_func = lidarinertialodom::LOSS_FUNC::GM;
-                else throw std::runtime_error("Invalid p2p_loss_func: " + loss_func);
+                else {
+                    LOG(ERROR) << "Invalid p2p_loss_func: " << loss_func;
+                    throw std::runtime_error("Invalid p2p_loss_func: " + loss_func);
+                }
             }
             if (odometry_options.contains("p2p_loss_sigma")) parsed_options.p2p_loss_sigma = odometry_options["p2p_loss_sigma"].get<double>();
-
-            // ########################################################################
             if (odometry_options.contains("use_rv")) parsed_options.use_rv = odometry_options["use_rv"].get<bool>();
             if (odometry_options.contains("merge_p2p_rv")) parsed_options.merge_p2p_rv = odometry_options["merge_p2p_rv"].get<bool>();
             if (odometry_options.contains("rv_max_error")) parsed_options.rv_max_error = odometry_options["rv_max_error"].get<double>();
@@ -361,22 +356,19 @@ namespace  stateestimate{
                 else if (loss_func == "DCS") parsed_options.rv_loss_func = lidarinertialodom::LOSS_FUNC::DCS;
                 else if (loss_func == "CAUCHY") parsed_options.rv_loss_func = lidarinertialodom::LOSS_FUNC::CAUCHY;
                 else if (loss_func == "GM") parsed_options.rv_loss_func = lidarinertialodom::LOSS_FUNC::GM;
-                else throw std::runtime_error("Invalid rv_loss_func: " + loss_func);
+                else {
+                    LOG(ERROR) << "Invalid rv_loss_func: " << loss_func;
+                    throw std::runtime_error("Invalid rv_loss_func: " + loss_func);
+                }
             }
             if (odometry_options.contains("rv_cov_inv")) parsed_options.rv_cov_inv = odometry_options["rv_cov_inv"].get<double>();
             if (odometry_options.contains("rv_loss_threshold")) parsed_options.rv_loss_threshold = odometry_options["rv_loss_threshold"].get<double>();
-
-            // ########################################################################
             if (odometry_options.contains("verbose")) parsed_options.verbose = odometry_options["verbose"].get<bool>();
             if (odometry_options.contains("max_iterations")) parsed_options.max_iterations = odometry_options["max_iterations"].get<int>();
             if (odometry_options.contains("sequential_threshold")) parsed_options.sequential_threshold = odometry_options["sequential_threshold"].get<int>();
             if (odometry_options.contains("num_threads")) parsed_options.num_threads = odometry_options["num_threads"].get<unsigned int>();
-
-            // ########################################################################
             if (odometry_options.contains("delay_adding_points")) parsed_options.delay_adding_points = odometry_options["delay_adding_points"].get<int>();
             if (odometry_options.contains("use_final_state_value")) parsed_options.use_final_state_value = odometry_options["use_final_state_value"].get<bool>();
-
-            // ########################################################################
             if (odometry_options.contains("gravity")) parsed_options.gravity = odometry_options["gravity"].get<double>();
             if (odometry_options.contains("r_imu_acc") && odometry_options["r_imu_acc"].is_array() && odometry_options["r_imu_acc"].size() == 3) {
                 for (int i = 0; i < 3; ++i) {
@@ -410,8 +402,6 @@ namespace  stateestimate{
             if (odometry_options.contains("use_imu")) parsed_options.use_imu = odometry_options["use_imu"].get<bool>();
             if (odometry_options.contains("T_mi_init_only")) parsed_options.T_mi_init_only = odometry_options["T_mi_init_only"].get<bool>();
             if (odometry_options.contains("use_T_mi_gt")) parsed_options.use_T_mi_gt = odometry_options["use_T_mi_gt"].get<bool>();
-
-            // ########################################################################
             if (odometry_options.contains("qg_diag") && odometry_options["qg_diag"].is_array() && odometry_options["qg_diag"].size() == 6) {
                 for (int i = 0; i < 6; ++i) {
                     parsed_options.qg_diag(i) = odometry_options["qg_diag"][i].get<double>();
@@ -453,13 +443,12 @@ namespace  stateestimate{
             if (odometry_options.contains("acc_loss_sigma")) parsed_options.acc_loss_sigma = odometry_options["acc_loss_sigma"].get<double>();
             if (odometry_options.contains("gyro_loss_func")) parsed_options.gyro_loss_func = odometry_options["gyro_loss_func"].get<std::string>();
             if (odometry_options.contains("gyro_loss_sigma")) parsed_options.gyro_loss_sigma = odometry_options["gyro_loss_sigma"].get<double>();
-
-            // ########################################################################
             if (odometry_options.contains("filter_lifetimes")) parsed_options.filter_lifetimes = odometry_options["filter_lifetimes"].get<bool>();
             if (odometry_options.contains("break_icp_early")) parsed_options.break_icp_early = odometry_options["break_icp_early"].get<bool>();
             if (odometry_options.contains("use_line_search")) parsed_options.use_line_search = odometry_options["use_line_search"].get<bool>();
             if (odometry_options.contains("use_accel")) parsed_options.use_accel = odometry_options["use_accel"].get<bool>();
         } catch (const nlohmann::json::exception& e) {
+            LOG(ERROR) << "JSON parsing error in metadata: " << e.what();
             throw std::runtime_error("JSON parsing error in metadata: " + std::string(e.what()));
         }
         return parsed_options;
@@ -469,11 +458,10 @@ namespace  stateestimate{
     // lidarinertialodom constructor
     // ########################################################################
 
-    lidarinertialodom::lidarinertialodom(const std::string& json_path) : Odometry(parse_json_options(json_path)), options_(parse_json_options(json_path)) {
-        // Initialize SLAM variables
+    lidarinertialodom::lidarinertialodom(const std::string& json_path)
+        : Odometry(parse_json_options(json_path)), options_(parse_json_options(json_path)) {
         T_sr_var_ = finalicp::se3::SE3StateVar::MakeShared(math::se3::Transformation(options_.T_sr));
         T_sr_var_->locked() = true;
-
         sliding_window_filter_ = finalicp::SlidingWindowFilter::MakeShared(options_.num_threads);
     }
 
