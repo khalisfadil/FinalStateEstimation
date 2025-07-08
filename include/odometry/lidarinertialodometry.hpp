@@ -14,7 +14,7 @@
 #include <tbb/blocked_range.h>
 #include <tbb/global_control.h>
 #include <tbb/concurrent_vector.h>
-#include <glog/logging.h>
+// #include <glog/logging.h>
 #include <common/stopwatch.hpp>
 
 namespace stateestimate {

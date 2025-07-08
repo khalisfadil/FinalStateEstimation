@@ -252,7 +252,7 @@ namespace  stateestimate{
         //     throw std::runtime_error("Planarity coefficient is NaN");
         // }
         if (neighborhood.a2D != neighborhood.a2D) {
-            LOG(ERROR) << "FOUND NAN!!!";
+            // LOG(ERROR) << "FOUND NAN!!!";
             throw std::runtime_error("error");
         }
 
@@ -267,7 +267,7 @@ namespace  stateestimate{
     lidarinertialodom::Options lidarinertialodom::parse_json_options(const std::string& json_path) {
         std::ifstream file(json_path);
         if (!file.is_open()) {
-            LOG(ERROR) << "Failed to open JSON file: " << json_path;
+            // LOG(ERROR) << "Failed to open JSON file: " << json_path;
             throw std::runtime_error("Failed to open JSON file: " + json_path);
         }
 
@@ -275,21 +275,21 @@ namespace  stateestimate{
         try {
             file >> json_data;
         } catch (const nlohmann::json::parse_error& e) {
-            LOG(ERROR) << "JSON parse error in " << json_path << ": " << e.what();
+            // LOG(ERROR) << "JSON parse error in " << json_path << ": " << e.what();
             throw std::runtime_error("JSON parse error in " + json_path + ": " + e.what());
         }
 
         lidarinertialodom::Options parsed_options;
 
         if (!json_data.is_object()) {
-            LOG(ERROR) << "JSON data must be an object";
+            // LOG(ERROR) << "JSON data must be an object";
             throw std::runtime_error("JSON data must be an object");
         }
 
         try {
             // Parse odometry_options object
             if (!json_data.contains("odometry_options") || !json_data["odometry_options"].is_object()) {
-                LOG(ERROR) << "Missing or invalid 'odometry_options' object";
+                // LOG(ERROR) << "Missing or invalid 'odometry_options' object";
                 throw std::runtime_error("Missing or invalid 'odometry_options' object");
             }
             const auto& odometry_options = json_data["odometry_options"];
@@ -342,7 +342,7 @@ namespace  stateestimate{
                 else if (loss_func == "CAUCHY") parsed_options.p2p_loss_func = lidarinertialodom::LOSS_FUNC::CAUCHY;
                 else if (loss_func == "GM") parsed_options.p2p_loss_func = lidarinertialodom::LOSS_FUNC::GM;
                 else {
-                    LOG(ERROR) << "Invalid p2p_loss_func: " << loss_func;
+                    // LOG(ERROR) << "Invalid p2p_loss_func: " << loss_func;
                     throw std::runtime_error("Invalid p2p_loss_func: " + loss_func);
                 }
             }
@@ -357,7 +357,7 @@ namespace  stateestimate{
                 else if (loss_func == "CAUCHY") parsed_options.rv_loss_func = lidarinertialodom::LOSS_FUNC::CAUCHY;
                 else if (loss_func == "GM") parsed_options.rv_loss_func = lidarinertialodom::LOSS_FUNC::GM;
                 else {
-                    LOG(ERROR) << "Invalid rv_loss_func: " << loss_func;
+                    // LOG(ERROR) << "Invalid rv_loss_func: " << loss_func;
                     throw std::runtime_error("Invalid rv_loss_func: " + loss_func);
                 }
             }
@@ -448,7 +448,7 @@ namespace  stateestimate{
             if (odometry_options.contains("use_line_search")) parsed_options.use_line_search = odometry_options["use_line_search"].get<bool>();
             if (odometry_options.contains("use_accel")) parsed_options.use_accel = odometry_options["use_accel"].get<bool>();
         } catch (const nlohmann::json::exception& e) {
-            LOG(ERROR) << "JSON parsing error in metadata: " << e.what();
+            // LOG(ERROR) << "JSON parsing error in metadata: " << e.what();
             throw std::runtime_error("JSON parsing error in metadata: " + std::string(e.what()));
         }
         return parsed_options;
@@ -488,10 +488,10 @@ namespace  stateestimate{
         // Open file with error handling
         std::ofstream trajectory_file(filename, std::ios::out);
         if (!trajectory_file.is_open()) {
-            LOG(ERROR) << "Failed to open trajectory file: " << filename;
+            // LOG(ERROR) << "Failed to open trajectory file: " << filename;
             return; // Avoid further operations if file cannot be opened
         }
-        LOG(INFO) << "Building full trajectory." << std::endl;
+        // LOG(INFO) << "Building full trajectory." << std::endl;
 
         // Build full trajectory
         auto full_trajectory =  finalicp::traj::const_acc::Interface::MakeShared(options_.qc_diag);
@@ -499,7 +499,7 @@ namespace  stateestimate{
             full_trajectory->add(var.time, var.T_rm, var.w_mr_inr, var.dw_mr_inr);
         }
         
-        LOG(INFO) << "Dumping trajectory." << std::endl;
+        // LOG(INFO) << "Dumping trajectory." << std::endl;
 
         // Buffer output in stringstream
         std::stringstream buffer;
@@ -527,7 +527,7 @@ namespace  stateestimate{
         trajectory_file << buffer.str();
         trajectory_file.close();
 
-        LOG(INFO) << "Dumping trajectory. - DONE" << std::endl;
+        // LOG(INFO) << "Dumping trajectory. - DONE" << std::endl;
     }
 
     // ########################################################################
@@ -540,7 +540,7 @@ namespace  stateestimate{
             return trajectory_;
         }
 
-        LOG(INFO) << "Building full trajectory." << std::endl;
+        // LOG(INFO) << "Building full trajectory." << std::endl;
 
         // Build full trajectory
         auto full_trajectory = finalicp::traj::const_acc::Interface::MakeShared(options_.qc_diag);
@@ -548,7 +548,7 @@ namespace  stateestimate{
             full_trajectory->add(var.time, var.T_rm, var.w_mr_inr, var.dw_mr_inr);
         }
 
-        LOG(INFO) << "Updating trajectory." << std::endl;
+        // LOG(INFO) << "Updating trajectory." << std::endl;
 
         using namespace finalicp::se3;
         using namespace finalicp::traj;
@@ -782,10 +782,10 @@ namespace  stateestimate{
 
         // Step 10: Output debug timers
         // Print timing information if debug mode is enabled
-        LOG(INFO) << "OUTER LOOP TIMERS" << std::endl;
+        // LOG(INFO) << "OUTER LOOP TIMERS" << std::endl;
         if (options_.debug_print) {
             for (size_t i = 0; i < timer.size(); i++)
-            LOG(INFO) << "Elapsed " << timer[i].first << *(timer[i].second) << std::endl;
+            // LOG(INFO) << "Elapsed " << timer[i].first << *(timer[i].second) << std::endl;
         }
 
         return summary;
@@ -1001,8 +1001,8 @@ namespace  stateestimate{
             }
         }
 
-        LOG(INFO) << "Adding points to map between (inclusive): " << begin_slam_time.seconds() << " - "
-            << end_slam_time.seconds() << ", with num states: " << num_states << std::endl;
+        // LOG(INFO) << "Adding points to map between (inclusive): " << begin_slam_time.seconds() << " - "
+            // << end_slam_time.seconds() << ", with num states: " << num_states << std::endl;
 
         // Collect unique timestamps
         std::set<double> unique_point_times_set;
@@ -1178,9 +1178,9 @@ namespace  stateestimate{
         solver.optimize();
 
         // Validate result
-        LOG(INFO) << "Initialization, T_mi:" << std::endl 
-            << T_mi_var->value().matrix() << std::endl
-            << "vec: " << T_mi_var->value().vec() << std::endl;
+        // LOG(INFO) << "Initialization, T_mi:" << std::endl 
+            // << T_mi_var->value().matrix() << std::endl
+            // << "vec: " << T_mi_var->value().vec() << std::endl;
         
         return T_mi_var->value().vec();
     }
@@ -1245,7 +1245,7 @@ namespace  stateestimate{
         // Step 7: Validate inputs and previous state
         // Ensure index_frame is valid and trajectory_vars_ is not empty
         // Logging system
-        LOG(INFO) << "[ICP] prev scan end time: " << trajectory_[index_frame - 1].end_timestamp << std::endl;
+        // LOG(INFO) << "[ICP] prev scan end time: " << trajectory_[index_frame - 1].end_timestamp << std::endl;
         
 
         // Step 8: Get the previous frame's end timestamp
@@ -1306,8 +1306,8 @@ namespace  stateestimate{
             if (use_T_mi_gt) {
                 // Use ground truth T_mi: set T_mi to T_mi_gt and lock it
                 prev_T_mi_var->update(T_mi_gt.vec()); // Update to ground truth (rotation only)
-                LOG(INFO) << "prev_T_mi_var->value()" << std::endl;
-                LOG(INFO) << prev_T_mi_var->value() << std::endl;
+                // LOG(INFO) << "prev_T_mi_var->value()" << std::endl;
+                // LOG(INFO) << prev_T_mi_var->value() << std::endl;
                 prev_T_mi_var->locked() = true; // Lock to prevent optimization
             } else {
                 // Use estimated T_mi: decide if it should be optimized
@@ -1321,8 +1321,8 @@ namespace  stateestimate{
         }
 
         ///################################################################################
-        LOG(INFO) << "[ICP] curr scan end time: " << trajectory_[index_frame].end_timestamp << std::endl;
-        LOG(INFO) << "[ICP] total num new states: " << 1 << std::endl;
+        // LOG(INFO) << "[ICP] curr scan end time: " << trajectory_[index_frame].end_timestamp << std::endl;
+        // LOG(INFO) << "[ICP] total num new states: " << 1 << std::endl;
 
         // Step 17: Get the current frame’s end timestamp
         // curr_time tells us when this frame ends
@@ -1386,8 +1386,8 @@ namespace  stateestimate{
             const auto dw_mr_inr_var = finalicp::vspace::VSpaceStateVar<6>::MakeShared(prev_dw_mr_inr); // Copy acceleration
             const auto imu_biases_var = finalicp::vspace::VSpaceStateVar<6>::MakeShared(prev_imu_biases); // Copy biases
 
-            LOG(INFO) << "init: w_mr_inr_var->value() " << w_mr_inr_var->value().transpose() << std::endl;
-            LOG(INFO) << "init: dw_mr_inr_var->value() " << dw_mr_inr_var->value().transpose() << std::endl;
+            // LOG(INFO) << "init: w_mr_inr_var->value() " << w_mr_inr_var->value().transpose() << std::endl;
+            // LOG(INFO) << "init: dw_mr_inr_var->value() " << dw_mr_inr_var->value().transpose() << std::endl;
 
             // Add state to trajectory
             SLAM_TRAJ->add(knot_slam_time, T_rm_var, w_mr_inr_var, dw_mr_inr_var);
@@ -1505,7 +1505,7 @@ namespace  stateestimate{
                 // Use current T_mi as the prior guess
                 math::se3::Transformation T_mi = PREV_VAR.T_mi->value();
 
-                LOG(INFO) << "T_mi(0)" << std::endl << T_mi.matrix() << std::endl;
+                // LOG(INFO) << "T_mi(0)" << std::endl << T_mi.matrix() << std::endl;
 
                 // Create cost term to constrain initial T_mi
                 auto T_mi_error = finalicp::se3::se3_error(PREV_VAR.T_mi, T_mi);
@@ -1625,7 +1625,7 @@ namespace  stateestimate{
             // Marginalize the collected variables if any
             if (!marg_vars.empty()) {
                 sliding_window_filter_->marginalizeVariable(marg_vars);
-                LOG(INFO) << "Marginalizing time (inclusive): " << begin_marg_time << " - " << end_marg_time << ", with num states: " << num_states << std::endl;
+                // LOG(INFO) << "Marginalizing time (inclusive): " << begin_marg_time << " - " << end_marg_time << ", with num states: " << num_states << std::endl;
             }
 
             // Step 30: Stop the marginalization timer
@@ -2289,8 +2289,8 @@ namespace  stateestimate{
             // Step 46: Check for sufficient keypoints
             // Ensures enough matches for reliable optimization
             if (N_matches < options_.min_number_keypoints) {
-                LOG(ERROR) << "[ICP]Error : not enough keypoints selected in ct-icp !" << std::endl;
-                LOG(ERROR) << "[ICP]Number_of_residuals : " << N_matches << std::endl;
+                // LOG(ERROR) << "[ICP]Error : not enough keypoints selected in ct-icp !" << std::endl;
+                // LOG(ERROR) << "[ICP]Number_of_residuals : " << N_matches << std::endl;
                 icp_success = false;
                 break; // Exit the ICP loop if insufficient keypoints
             }
@@ -2370,7 +2370,7 @@ namespace  stateestimate{
                 current_estimate.mid_b = trajectory_vars_[i].imu_biases->value();
             }
 
-            LOG(INFO) << "diff_rot: " << diff_rot << " diff_trans: " << diff_trans << " diff_vel: " << diff_vel << " diff_acc: " << diff_acc << std::endl;
+            // LOG(INFO) << "diff_rot: " << diff_rot << " diff_trans: " << diff_trans << " diff_vel: " << diff_vel << " diff_acc: " << diff_acc << std::endl;
 
             // Check convergence
             if (index_frame > 1 &&
@@ -2379,7 +2379,7 @@ namespace  stateestimate{
                 diff_vel < (options_.threshold_translation_norm * 10.0 + options_.threshold_orientation_norm * 10.0) &&
                 diff_acc < (options_.threshold_translation_norm * 100.0 + options_.threshold_orientation_norm * 100.0)) {
                 if (options_.debug_print) {
-                    LOG(INFO) << "ICP: Finished with N=" << iter << " ICP iterations" << std::endl;
+                    // LOG(INFO) << "ICP: Finished with N=" << iter << " ICP iterations" << std::endl;
                 }
                 if (options_.break_icp_early) {
                     break; // Exit loop if converged and early breaking is enabled
@@ -2422,8 +2422,8 @@ namespace  stateestimate{
             sliding_window_filter_->addCostTerm(imu_super_cost_term); // Add IMU super cost term
         }
 
-        LOG(INFO) << "number of variables: " << sliding_window_filter_->getNumberOfVariables() << std::endl;
-        LOG(INFO) << "number of cost terms: " << sliding_window_filter_->getNumberOfCostTerms() << std::endl;
+        // LOG(INFO) << "number of variables: " << sliding_window_filter_->getNumberOfVariables() << std::endl;
+        // LOG(INFO) << "number of cost terms: " << sliding_window_filter_->getNumberOfCostTerms() << std::endl;
 
         // Step 50: Validate and optimize the sliding window filter
         // Checks variable and cost term counts, then solves the optimization problem
@@ -2501,24 +2501,24 @@ namespace  stateestimate{
 
             const auto bias_intp_eval = finalicp::vspace::VSpaceInterpolator<6>::MakeShared(curr_mid_slam_time, trajectory_vars_[i].imu_biases, trajectory_vars_[i].time, trajectory_vars_[i + 1].imu_biases, trajectory_vars_[i + 1].time);
             current_estimate.mid_b = bias_intp_eval->value();
-            LOG(INFO) << "mid_T_mi: " << current_estimate.mid_T_mi << std::endl;
-            LOG(INFO) << "b_begin: " << trajectory_vars_[i].imu_biases->value().transpose() << std::endl;
-            LOG(INFO) << "b_end: " << trajectory_vars_[i + 1].imu_biases->value().transpose() << std::endl;
+            // LOG(INFO) << "mid_T_mi: " << current_estimate.mid_T_mi << std::endl;
+            // LOG(INFO) << "b_begin: " << trajectory_vars_[i].imu_biases->value().transpose() << std::endl;
+            // LOG(INFO) << "b_end: " << trajectory_vars_[i + 1].imu_biases->value().transpose() << std::endl;
         }
 
         // Step 54: Validate final estimate parameters
         // Ensures keypoints, velocities, and accelerations are valid
-        LOG(INFO) << "Number of keypoints used in CT-ICP : " << N_matches << std::endl;
-        LOG(INFO) << "v_begin: " << v_begin.transpose() << std::endl;
-        LOG(INFO) << "v_end: " << v_end.transpose() << std::endl;
-        LOG(INFO) << "a_begin: " << a_begin.transpose() << std::endl;
-        LOG(INFO) << "a_end: " << a_end.transpose() << std::endl;
+        // LOG(INFO) << "Number of keypoints used in CT-ICP : " << N_matches << std::endl;
+        // LOG(INFO) << "v_begin: " << v_begin.transpose() << std::endl;
+        // LOG(INFO) << "v_end: " << v_end.transpose() << std::endl;
+        // LOG(INFO) << "a_begin: " << a_begin.transpose() << std::endl;
+        // LOG(INFO) << "a_end: " << a_end.transpose() << std::endl;
 
         if (options_.debug_print) {
             for (size_t i = 0; i < timer.size(); i++) {LOG(INFO) << "Elapsed " << timer[i].first << *(timer[i].second) << std::endl;}
-            LOG(INFO) << "Number iterations CT-ICP : " << options_.num_iters_icp << std::endl;
-            LOG(INFO) << "Translation Begin: " << trajectory_[index_frame].begin_t.transpose() << std::endl;
-            LOG(INFO) << "Translation End: " << trajectory_[index_frame].end_t.transpose() << std::endl;
+            // LOG(INFO) << "Number iterations CT-ICP : " << options_.num_iters_icp << std::endl;
+            // LOG(INFO) << "Translation Begin: " << trajectory_[index_frame].begin_t.transpose() << std::endl;
+            // LOG(INFO) << "Translation End: " << trajectory_[index_frame].end_t.transpose() << std::endl;
         }
 
         // Step 55: Return success status
