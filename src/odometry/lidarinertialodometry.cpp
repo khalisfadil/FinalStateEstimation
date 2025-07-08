@@ -1488,7 +1488,7 @@ namespace  stateestimate{
                 // Set covariance for initial IMU bias prior
                 Eigen::Matrix<double, 6, 6> init_bias_cov = Eigen::Matrix<double, 6, 6>::Identity();
                 init_bias_cov.block<3, 3>(0, 0).diagonal() = options_.p0_bias_accel; // Accelerometer bias covariance
-                init_bias_cov.block<3, 3>(3, 3).diagonal() = Eigen::Matrix<double, 3, 3>::Identity() * options_.p0_bias_gyro; // Gyroscope bias covariance
+                init_bias_cov.block<3, 3>(3, 3).diagonal() = Eigen::Vector3d::Constant(options_.p0_bias_gyro); // Gyroscope bias covariance
 
                 // Create cost term to constrain initial IMU biases
                 auto bias_error = finalicp::vspace::vspace_error<6>(PREV_VAR.imu_biases, b_zero);
