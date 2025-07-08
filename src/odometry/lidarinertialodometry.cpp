@@ -2514,12 +2514,12 @@ namespace  stateestimate{
         // LOG(INFO) << "a_begin: " << a_begin.transpose() << std::endl;
         // LOG(INFO) << "a_end: " << a_end.transpose() << std::endl;
 
-        if (options_.debug_print) {
-            for (size_t i = 0; i < timer.size(); i++) {LOG(INFO) << "Elapsed " << timer[i].first << *(timer[i].second) << std::endl;}
+        // if (options_.debug_print) {
+            // for (size_t i = 0; i < timer.size(); i++) {LOG(INFO) << "Elapsed " << timer[i].first << *(timer[i].second) << std::endl;}
             // LOG(INFO) << "Number iterations CT-ICP : " << options_.num_iters_icp << std::endl;
             // LOG(INFO) << "Translation Begin: " << trajectory_[index_frame].begin_t.transpose() << std::endl;
             // LOG(INFO) << "Translation End: " << trajectory_[index_frame].end_t.transpose() << std::endl;
-        }
+        // }
 
         // Step 55: Return success status
         // Completes the icp function, returning whether the frame was successfully processed
