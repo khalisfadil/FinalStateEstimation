@@ -1381,7 +1381,6 @@ namespace  stateestimate{
 
         // Step 22: Add new states for the current frame sequentially
         // Each state includes pose, velocity, acceleration, etc., at a knot time
-        std::vector<TrajectoryVar> new_trajectory_vars(NUM_STATES); // Preallocate for new states
         for (size_t i = 0; i < KNOT_TIMES.size(); ++i) {
             // Get timestamp for this state
             double knot_time = KNOT_TIMES[i];
@@ -1412,37 +1411,25 @@ namespace  stateestimate{
                 SLAM_STATE_VAR.emplace_back(imu_biases_var); // Add IMU biases
             }
 
-            // Use ground truth or estimated T_mi
             const auto T_mi_var = finalicp::se3::SE3StateVar::MakeShared(use_T_mi_gt ? math::se3::Transformation() : prev_T_mi);
-            if (options_.use_imu) {
-                if (use_T_mi_gt || options_.T_mi_init_only) {
-                    T_mi_var->locked() = true; // Lock T_mi if ground truth or init-only
-                } else {
-                    SLAM_STATE_VAR.emplace_back(T_mi_var); // Optimize T_mi
+
+            if (use_T_mi_gt) {
+                T_mi_var->locked() = true; // Lock T_mi if ground truth or init-only
+                trajectory_vars_.emplace_back(knot_slam_time, T_rm_var, w_mr_inr_var, dw_mr_inr_var, imu_biases_var, T_mi_var);
+            } else {
+                 if (options_.use_imu) {
+                    if (options_.T_mi_init_only) {
+                        T_mi_var->locked() = true;
+                    } else {
+                        SLAM_STATE_VAR.emplace_back(T_mi_var); // Optimize T_mi
+                    }
                 }
+                trajectory_vars_.emplace_back(knot_slam_time, T_rm_var, w_mr_inr_var, dw_mr_inr_var, imu_biases_var, T_mi_var);
+                
             }
-
-            // Store state in trajectory_vars_
-            new_trajectory_vars[i] = TrajectoryVar(knot_slam_time, std::move(T_rm_var), std::move(w_mr_inr_var),
-                                                std::move(dw_mr_inr_var), std::move(imu_biases_var), std::move(T_mi_var));
-
             // Update index for next state
             curr_trajectory_var_index++;
         }
-
-        // Step 23: Move new states to trajectory_vars_
-        // Add new states to the main trajectory list for future frames
-        for (auto& var : new_trajectory_vars) {
-            trajectory_vars_.emplace_back(std::move(var));
-        }
-
-        // Step 24: Output timers to cerr if debug_print is enabled
-        // if (options_.debug_print && !timer.empty()) {
-        //     std::cerr << "Timers:\n";
-        //     for (const auto& t : timer) {
-        //         std::cerr << t.first << *(t.second) << "\n";
-        //     }
-        // }
 
         ///################################################################################
 
@@ -2135,7 +2122,7 @@ namespace  stateestimate{
                 meas_cost_terms.reserve(keypoints.size()); // Reserve for new cost terms
             #endif
 
-            ///################################################################################
+        ///################################################################################
 
             if (keypoints.size() <= static_cast<size_t>(options_.sequential_threshold)) {
                 // Sequential: Process keypoints one by one for small sizes
@@ -2276,10 +2263,8 @@ namespace  stateestimate{
                     meas_cost_terms.assign(temp_meas_cost_terms.begin(), temp_meas_cost_terms.end());
                 #endif
             }
-        
-            
 
-            ///################################################################################
+        ///################################################################################
 
             // Step 45: Add cost terms to the optimization problem
             // Sets the number of matches and adds all cost terms for STEAM optimization
