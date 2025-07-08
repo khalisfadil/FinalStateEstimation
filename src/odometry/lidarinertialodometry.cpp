@@ -488,7 +488,8 @@ namespace  stateestimate{
         // Open file with error handling
         std::ofstream trajectory_file(filename, std::ios::out);
         if (!trajectory_file.is_open()) {
-            throw std::runtime_error("Failed to open trajectory file: " + filename);
+            LOG(ERROR) << "Failed to open trajectory file: " << filename;
+            return; // Avoid further operations if file cannot be opened
         }
         LOG(INFO) << "Building full trajectory." << std::endl;
 
