@@ -1331,7 +1331,7 @@ namespace  stateestimate{
             }
         }
 
-         ///################################################################################
+        ///################################################################################
         LOG(INFO) << "[ICP] curr scan end time: " << trajectory_[index_frame].end_timestamp << std::endl;
         LOG(INFO) << "[ICP] total num new states: " << 1 << std::endl;
 
@@ -2135,7 +2135,9 @@ namespace  stateestimate{
                 meas_cost_terms.reserve(keypoints.size()); // Reserve for new cost terms
             #endif
 
-            if (keypoints.size() <= options_.sequential_threshold) {
+            ///################################################################################
+
+            if (keypoints.size() <= static_cast<size_t>(options_.sequential_threshold)) {
                 // Sequential: Process keypoints one by one for small sizes
                 for (size_t i = 0; i < keypoints.size(); i++) {
                     const auto& keypoint = keypoints[i];
@@ -2150,7 +2152,7 @@ namespace  stateestimate{
                     }
 
                     // Compute neighborhood distribution (normals, planarity)
-                    auto neighborhood = compute_neighborhood_distribution(vector_neighbors, options_.num_threads, options_.sequential_threshold); //tbb included
+                    auto neighborhood = compute_neighborhood_distribution(vector_neighbors, options_.num_threads, options_.sequential_threshold);
 
                     // Compute planarity weight and distance to plane
                     const double planarity_weight = std::pow(neighborhood.a2D, options_.power_planarity);
@@ -2159,7 +2161,6 @@ namespace  stateestimate{
                     const bool use_p2p = dist_to_plane < options_.p2p_max_dist;
 
                     if (use_p2p) {
-
                         #if USE_P2P_SUPER_COST_TERM
                             // Create point-to-plane match
                             Eigen::Vector3d closest_pt = vector_neighbors[0];
@@ -2179,21 +2180,16 @@ namespace  stateestimate{
                             const auto loss_func = [this]() -> finalicp::BaseLossFunc::Ptr {
                                 switch (options_.p2p_loss_func) {
                                     case stateestimate::lidarinertialodom::LOSS_FUNC::L2:
-                                        loss_func = finalicp::L2LossFunc::MakeShared();
-                                        break;
+                                        return finalicp::L2LossFunc::MakeShared();
                                     case stateestimate::lidarinertialodom::LOSS_FUNC::DCS:
-                                        loss_func = finalicp::DcsLossFunc::MakeShared(options_.p2p_loss_sigma);
-                                        break;
+                                        return finalicp::DcsLossFunc::MakeShared(options_.p2p_loss_sigma);
                                     case stateestimate::lidarinertialodom::LOSS_FUNC::CAUCHY:
-                                        loss_func = finalicp::CauchyLossFunc::MakeShared(options_.p2p_loss_sigma);
-                                        break;
+                                        return finalicp::CauchyLossFunc::MakeShared(options_.p2p_loss_sigma);
                                     case stateestimate::lidarinertialodom::LOSS_FUNC::GM:
-                                        loss_func = finalicp::GemanMcClureLossFunc::MakeShared(options_.p2p_loss_sigma);
-                                        break;
+                                        return finalicp::GemanMcClureLossFunc::MakeShared(options_.p2p_loss_sigma);
                                     default:
                                         return nullptr;
                                 }
-                                return nullptr;
                             }();
 
                             const auto cost = finalicp::WeightedLeastSqCostTerm<3>::MakeShared(error_func, noise_model, loss_func);
@@ -2203,10 +2199,9 @@ namespace  stateestimate{
                 }
             } else {
                 // Parallel: Process keypoints concurrently with TBB
-                tbb::concurrent_vector<finalicp::P2PMatch> temp_p2p_matches(keypoints.size());
-
+                tbb::concurrent_vector<finalicp::P2PMatch> temp_p2p_matches; // Initialize empty vector
                 #if !USE_P2P_SUPER_COST_TERM
-                    tbb::concurrent_vector<finalicp::BaseCostTerm::ConstPtr> temp_meas_cost_terms(keypoints.size());
+                    tbb::concurrent_vector<finalicp::BaseCostTerm::ConstPtr> temp_meas_cost_terms; // Initialize empty vector
                 #endif
 
                 tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
@@ -2217,7 +2212,6 @@ namespace  stateestimate{
                             const auto& pt_keypoint = keypoint.pt;
 
                             // Search for neighboring points in the map
-                            // Note: Assumes map_.searchNeighbors is thread-safe for concurrent reads
                             ArrayVector3d vector_neighbors = map_.searchNeighbors(pt_keypoint, nb_voxels_visited, options_.size_voxel_map, options_.max_number_neighbors);
 
                             // Skip if insufficient neighbors
@@ -2226,7 +2220,7 @@ namespace  stateestimate{
                             }
 
                             // Compute neighborhood distribution (normals, planarity)
-                            auto neighborhood = compute_neighborhood_distribution(vector_neighbors,options_.num_threads, options_.sequential_threshold);
+                            auto neighborhood = compute_neighborhood_distribution(vector_neighbors, options_.num_threads, options_.sequential_threshold);
 
                             // Compute planarity weight and distance to plane
                             const double planarity_weight = std::pow(neighborhood.a2D, options_.power_planarity);
@@ -2253,25 +2247,20 @@ namespace  stateestimate{
                                     const auto error_func = finalicp::p2p::p2pError(T_mr_intp_eval, closest_pt, keypoint.raw_pt);
                                     error_func->setTime(finalicp::traj::Time(keypoint.timestamp));
 
-                                   // Select loss function based on options
+                                    // Select loss function based on options
                                     const auto loss_func = [this]() -> finalicp::BaseLossFunc::Ptr {
                                         switch (options_.p2p_loss_func) {
                                             case stateestimate::lidarinertialodom::LOSS_FUNC::L2:
-                                                loss_func = finalicp::L2LossFunc::MakeShared();
-                                                break;
+                                                return finalicp::L2LossFunc::MakeShared();
                                             case stateestimate::lidarinertialodom::LOSS_FUNC::DCS:
-                                                loss_func = finalicp::DcsLossFunc::MakeShared(options_.p2p_loss_sigma);
-                                                break;
+                                                return finalicp::DcsLossFunc::MakeShared(options_.p2p_loss_sigma);
                                             case stateestimate::lidarinertialodom::LOSS_FUNC::CAUCHY:
-                                                loss_func = finalicp::CauchyLossFunc::MakeShared(options_.p2p_loss_sigma);
-                                                break;
+                                                return finalicp::CauchyLossFunc::MakeShared(options_.p2p_loss_sigma);
                                             case stateestimate::lidarinertialodom::LOSS_FUNC::GM:
-                                                loss_func = finalicp::GemanMcClureLossFunc::MakeShared(options_.p2p_loss_sigma);
-                                                break;
+                                                return finalicp::GemanMcClureLossFunc::MakeShared(options_.p2p_loss_sigma);
                                             default:
                                                 return nullptr;
                                         }
-                                        return nullptr;
                                     }();
 
                                     const auto cost = finalicp::WeightedLeastSqCostTerm<3>::MakeShared(error_func, noise_model, loss_func);
@@ -2287,6 +2276,8 @@ namespace  stateestimate{
                     meas_cost_terms.assign(temp_meas_cost_terms.begin(), temp_meas_cost_terms.end());
                 #endif
             }
+        
+            
 
             ///################################################################################
 
