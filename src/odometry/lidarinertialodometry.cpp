@@ -28,7 +28,7 @@ namespace  stateestimate{
         using VoxelMap = tsl::robin_map<Voxel, Point3D, VoxelHash>;
 
         // Check if the input frame size is below the sequential threshold
-        if (frame.size() < sequential_threshold) {
+        if (frame.size() < static_cast<size_t>(sequential_threshold)) {
             // Step 1: Sequential processing for small inputs (faster for small datasets)
             // Create a voxel map to store one point per voxel
             VoxelMap voxel_map;
@@ -190,7 +190,7 @@ namespace  stateestimate{
         Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
         const size_t point_count = points.size();
 
-        if (point_count < sequential_threshold) {
+        if (point_count < static_cast<size_t>(sequential_threshold)) {
             // Sequential for small inputs
             for (const auto& point : points) {
                 barycenter += point;
@@ -808,7 +808,7 @@ namespace  stateestimate{
         double min_timestamp = std::numeric_limits<double>::max();
         double max_timestamp = std::numeric_limits<double>::min();
 
-        if (const_frame.pointcloud.size() < options_.sequential_threshold) {
+        if (const_frame.pointcloud.size() < static_cast<size_t>(options_.sequential_threshold)) {
             // Sequential processing
             for (const auto& point : const_frame.pointcloud) {
                 min_timestamp = std::min(min_timestamp, point.timestamp);
@@ -921,7 +921,7 @@ namespace  stateestimate{
         const Eigen::Vector3d t_begin = traj.begin_t;
         const Eigen::Vector3d t_end = traj.end_t;
 
-        if (frame.size() < options_.sequential_threshold) {
+        if (frame.size() < static_cast<size_t>(options_.sequential_threshold)) {
             // Sequential processing
             for (auto& point : frame) {
                 const double alpha = point.alpha_timestamp;
@@ -1014,7 +1014,7 @@ namespace  stateestimate{
         const Eigen::Matrix4d T_rs = options_.T_sr.inverse();
 
         std::map<double, Eigen::Matrix4d> T_ms_cache_map;
-        if (unique_point_times.size() < options_.sequential_threshold) {
+        if (unique_point_times.size() < static_cast<size_t>(options_.sequential_threshold)) {
             // Sequential pose interpolation
             for (const auto& ts : unique_point_times) {
                 const auto T_rm_intp_eval = update_trajectory->getPoseInterpolator(finalicp::traj::Time(ts));
@@ -1044,7 +1044,7 @@ namespace  stateestimate{
         }
 
         // Apply transformations
-        if (frame.size() < options_.sequential_threshold) {
+        if (frame.size() < static_cast<size_t>(options_.sequential_threshold)) {
             // Sequential point transformation
             for (auto& point : frame) {
                 try {
@@ -1123,7 +1123,7 @@ namespace  stateestimate{
         // Create cost terms
         std::vector<finalicp::BaseCostTerm::ConstPtr> cost_terms;
         cost_terms.reserve(imu_data_vec.size()); // +1 for prior term
-        if (imu_data_vec.size() < options_.sequential_threshold) {
+        if (imu_data_vec.size() < static_cast<size_t>(options_.sequential_threshold)) {
             // Sequential cost term creation with std::vector
            for (const auto &imu_data : imu_data_vec) {
                 auto acc_error_func = finalicp::imu::AccelerationError(T_rm_init, dw_mr_inr, bias, T_mi_var, imu_data.lin_acc);
@@ -1364,8 +1364,8 @@ namespace  stateestimate{
 
         // Step 21: Prepare default values for new states
         // w_next and dw_next are initial velocity and acceleration (set to zero)
-        const Eigen::Matrix<double, 6, 1> w_next = Eigen::Matrix<double, 6, 1>::Zero();
-        const Eigen::Matrix<double, 6, 1> dw_next = Eigen::Matrix<double, 6, 1>::Zero();
+        // const Eigen::Matrix<double, 6, 1> w_next = Eigen::Matrix<double, 6, 1>::Zero();
+        // const Eigen::Matrix<double, 6, 1> dw_next = Eigen::Matrix<double, 6, 1>::Zero();
 
         // Step 22: Add new states for the current frame sequentially
         // Each state includes pose, velocity, acceleration, etc., at a knot time
@@ -1826,7 +1826,7 @@ namespace  stateestimate{
         const Eigen::Matrix<double, 18, 18> Tran_T = SLAM_TRAJ->getTranPublic(T); // Transition matrix
 
         // Compute interpolation matrices
-        if (unique_point_times.size() <= options_.sequential_threshold) {
+        if (unique_point_times.size() < static_cast<size_t>(options_.sequential_threshold)) {
             // Sequential: Process timestamps one by one for small sizes
             for (size_t i = 0; i < unique_point_times.size(); ++i) {
                 const double time = unique_point_times[i];
@@ -1891,7 +1891,7 @@ namespace  stateestimate{
             // Computes and stores pose matrices (T_mr) for each timestamp in unique_point_times
             std::map<double, Eigen::Matrix4d> T_mr_cache_map;
 
-            if (unique_point_times.size() <= options_.sequential_threshold) {
+            if (unique_point_times.size() < static_cast<size_t>(options_.sequential_threshold)) {
                 // Sequential: Process timestamps one by one for small sizes
                 for (size_t jj = 0; jj < unique_point_times.size(); ++jj) {
                     const double ts = unique_point_times[jj];
@@ -1940,7 +1940,7 @@ namespace  stateestimate{
 
             // Step 37.2: Transform keypoints to the map frame
             // Applies cached pose matrices (T_mr) to transform raw keypoint coordinates to the map frame
-            if (keypoints.size() <= options_.sequential_threshold) {
+            if (keypoints.size() < static_cast<size_t>(options_.sequential_threshold)) {
                 // Sequential: Transform keypoints one by one for small sizes
                 for (size_t jj = 0; jj < keypoints.size(); ++jj) {
                     auto& keypoint = keypoints[jj];
@@ -2008,7 +2008,7 @@ namespace  stateestimate{
             timer[0].second->start(); // Start update transform timer
             const Eigen::Matrix4d T_rs_mat = options_.T_sr.inverse(); // Inverse sensor-to-robot transformation
 
-            if (keypoints.size() <= options_.sequential_threshold) {
+            if (keypoints.size() < static_cast<size_t>(options_.sequential_threshold)) {
                 // Sequential: Transform keypoints one by one for small sizes
                 for (size_t i = 0; i < keypoints.size(); ++i) {
                     auto& keypoint = keypoints[i];
@@ -2112,7 +2112,7 @@ namespace  stateestimate{
 
         ///################################################################################
 
-            if (keypoints.size() <= static_cast<size_t>(options_.sequential_threshold)) {
+            if (keypoints.size() < static_cast<size_t>(options_.sequential_threshold)) {
                 // Sequential: Process keypoints one by one for small sizes
                 for (size_t i = 0; i < keypoints.size(); i++) {
                     const auto& keypoint = keypoints[i];
@@ -2514,8 +2514,7 @@ namespace  stateestimate{
         LOG(INFO) << "a_end: " << a_end.transpose() << std::endl;
 
         if (options_.debug_print) {
-        for (size_t i = 0; i < timer.size(); i++)
-            LOG(INFO) << "Elapsed " << timer[i].first << *(timer[i].second) << std::endl;
+            for (size_t i = 0; i < timer.size(); i++) {LOG(INFO) << "Elapsed " << timer[i].first << *(timer[i].second) << std::endl;}
             LOG(INFO) << "Number iterations CT-ICP : " << options_.num_iters_icp << std::endl;
             LOG(INFO) << "Translation Begin: " << trajectory_[index_frame].begin_t.transpose() << std::endl;
             LOG(INFO) << "Translation End: " << trajectory_[index_frame].end_t.transpose() << std::endl;
