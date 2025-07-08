@@ -783,10 +783,10 @@ namespace  stateestimate{
         // Step 10: Output debug timers
         // Print timing information if debug mode is enabled
         // LOG(INFO) << "OUTER LOOP TIMERS" << std::endl;
-        if (options_.debug_print) {
-            for (size_t i = 0; i < timer.size(); i++)
+        // if (options_.debug_print) {
+            // for (size_t i = 0; i < timer.size(); i++)
             // LOG(INFO) << "Elapsed " << timer[i].first << *(timer[i].second) << std::endl;
-        }
+        // }
 
         return summary;
     }
