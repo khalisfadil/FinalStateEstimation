@@ -103,9 +103,9 @@ namespace stateestimate {
 
             void add(const Eigen::Vector3d &point, double voxel_size, int max_num_points_in_voxel, 
                                         double min_distance_points, int min_num_points = 0) {
-                int16_t kx = static_cast<int16_t>(point[0] / voxel_size);
-                int16_t ky = static_cast<int16_t>(point[1] / voxel_size);
-                int16_t kz = static_cast<int16_t>(point[2] / voxel_size);
+                int32_t kx = static_cast<int32_t>(point[0] / voxel_size);
+                int32_t ky = static_cast<int32_t>(point[1] / voxel_size);
+                int32_t kz = static_cast<int32_t>(point[2] / voxel_size);
 
                 VoxelHashMap::iterator search = voxel_map_.find(Voxel(kx, ky, kz));
                 if (search != voxel_map_.end()) {
@@ -166,33 +166,33 @@ namespace stateestimate {
 
                 // Compute center voxel coordinates
                 const Voxel center = Voxel::Coordinates(point, size_voxel_map);
-                const int16_t kx = center.x;
-                const int16_t ky = center.y;
-                const int16_t kz = center.z;
+                const int32_t kx = center.x;
+                const int32_t ky = center.y;
+                const int32_t kz = center.z;
 
                 // Initialize min-heap for closest points
                 priority_queue_t priority_queue;
 
                 // Precompute search bounds
-                const int16_t x_min = kx - nb_voxels_visited;
-                const int16_t x_max = kx + nb_voxels_visited + 1;
-                const int16_t y_min = ky - nb_voxels_visited;
-                const int16_t y_max = ky + nb_voxels_visited + 1;
-                const int16_t z_min = kz - nb_voxels_visited;
-                const int16_t z_max = kz + nb_voxels_visited + 1;
+                const int32_t x_min = kx - nb_voxels_visited;
+                const int32_t x_max = kx + nb_voxels_visited + 1;
+                const int32_t y_min = ky - nb_voxels_visited;
+                const int32_t y_max = ky + nb_voxels_visited + 1;
+                const int32_t z_min = kz - nb_voxels_visited;
+                const int32_t z_max = kz + nb_voxels_visited + 1;
 
                 // Track max distance for pruning
                 double max_distance = std::numeric_limits<double>::max();
 
                 // Spiral traversal: process voxels layer by layer
-                for (int16_t d = 0; d <= nb_voxels_visited; ++d) {
-                    for (int16_t dx = -d; dx <= d; ++dx) {
-                        for (int16_t dy = -d; dy <= d; ++dy) {
-                            for (int16_t dz = -d; dz <= d; ++dz) {
+                for (int32_t d = 0; d <= nb_voxels_visited; ++d) {
+                    for (int32_t dx = -d; dx <= d; ++dx) {
+                        for (int32_t dy = -d; dy <= d; ++dy) {
+                            for (int32_t dz = -d; dz <= d; ++dz) {
                                 // Only process boundary voxels at distance d
                                 if (std::abs(dx) != d && std::abs(dy) != d && std::abs(dz) != d) continue;
 
-                                Voxel voxel{kx + dx, ky + dy, kz + dz};
+                                Voxel voxel{static_cast<int32_t>(kx + dx), static_cast<int32_t>(ky + dy), static_cast<int32_t>(kz + dz)};
 
                                 // Skip out-of-bounds voxels
                                 if (voxel.x < x_min || voxel.x >= x_max ||

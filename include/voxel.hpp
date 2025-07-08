@@ -9,12 +9,12 @@ namespace stateestimate {
     using ArrayVector3d = std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>>;
 
     struct Voxel {
-        int16_t x = 0;
-        int16_t y = 0;
-        int16_t z = 0;
+        int32_t x = 0;
+        int32_t y = 0;
+        int32_t z = 0;
 
         Voxel() = default;
-        Voxel(int16_t x, int16_t y, int16_t z) : x(x), y(y), z(z) {}
+        Voxel(int32_t x, int32_t y, int32_t z) : x(x), y(y), z(z) {}
 
         bool operator==(const Voxel& other) const {
             return x == other.x && y == other.y && z == other.z;
@@ -29,18 +29,18 @@ namespace stateestimate {
 
         static Voxel Coordinates(const Eigen::Vector3d& point, double voxel_size) {
             return {
-                static_cast<int16_t>((point.x()) / voxel_size),
-                static_cast<int16_t>((point.y()) / voxel_size),
-                static_cast<int16_t>((point.z()) / voxel_size)
+                static_cast<int32_t>((point.x()) / voxel_size),
+                static_cast<int32_t>((point.y()) / voxel_size),
+                static_cast<int32_t>((point.z()) / voxel_size)
             };
         }
     };
 
     struct VoxelHash {
         size_t operator()(const Voxel& voxel) const {
-            uint64_t packed = (static_cast<uint64_t>(static_cast<uint16_t>(voxel.x)) << 0) |
-                            (static_cast<uint64_t>(static_cast<uint16_t>(voxel.y)) << 16) |
-                            (static_cast<uint64_t>(static_cast<uint16_t>(voxel.z)) << 32);
+            uint64_t packed = (static_cast<uint64_t>(static_cast<int32_t>(voxel.x)) << 0) |
+                            (static_cast<uint64_t>(static_cast<int32_t>(voxel.y)) << 16) |
+                            (static_cast<uint64_t>(static_cast<int32_t>(voxel.z)) << 32);
             packed ^= packed >> 33;
             packed *= 0x9E3779B97F4A7C15ULL;
             packed ^= packed >> 29;
@@ -51,7 +51,7 @@ namespace stateestimate {
     };
 
     struct VoxelBlock {
-            explicit VoxelBlock(int16_t capacity = 20) : capacity_(capacity) {
+            explicit VoxelBlock(int32_t capacity = 20) : capacity_(capacity) {
                 points.reserve(capacity);
             }
 
@@ -69,15 +69,15 @@ namespace stateestimate {
                 return static_cast<int>(points.size());
             }
 
-            int16_t Capacity() const {
+            int32_t Capacity() const {
                 return capacity_;
             }
 
             ArrayVector3d points;
-            int16_t life_time = 0; // 0 means no expiration
+            int32_t life_time = 0; // 0 means no expiration
 
         private:
-            int16_t capacity_;
+            int32_t capacity_;
     };
 
     using VoxelHashMap = tsl::robin_map<Voxel, VoxelBlock, VoxelHash>;
