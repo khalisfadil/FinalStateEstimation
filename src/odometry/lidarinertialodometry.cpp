@@ -585,7 +585,6 @@ namespace  stateestimate{
         // Open file with error handling
         std::ofstream trajectory_file(filename, std::ios::out);
         if (!trajectory_file.is_open()) {
-            throw std::runtime_error("Failed to open: " + filename);
             return; // Avoid further operations if file cannot be opened
         }
 #ifdef DEBUG
@@ -1773,7 +1772,9 @@ namespace  stateestimate{
             // Marginalize the collected variables if any
             if (!marg_vars.empty()) {
                 sliding_window_filter_->marginalizeVariable(marg_vars);
-                // LOG(INFO) << "Marginalizing time (inclusive): " << begin_marg_time << " - " << end_marg_time << ", with num states: " << num_states << std::endl;
+#ifdef DEBUG
+                std::cout << "Marginalizing time (inclusive): " << begin_marg_time << " - " << end_marg_time << ", with num states: " << num_states << std::endl;
+#endif
             }
 
             // Step 30: Stop the marginalization timer
