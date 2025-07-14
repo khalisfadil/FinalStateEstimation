@@ -103,6 +103,7 @@ namespace stateestimate {
     private:
         inline double AngularDistance(const Eigen::Matrix3d& rota, const Eigen::Matrix3d& rotb);
         void sub_sample_frame(std::vector<Point3D>& frame, double size_voxel, int num_threads, int sequential_threshold);
+        void sub_sample_frame_outlier_removal(std::vector<Point3D>& frame, double size_voxel, int num_threads, int sequential_threshold);
         void grid_sampling(const std::vector<Point3D>& frame, std::vector<Point3D>& keypoints, double size_voxel_subsampling, int num_threads, int sequential_threshold);
         void initializeTimestamp(int index_frame, const DataFrame& const_frame);
         Neighborhood compute_neighborhood_distribution(const ArrayVector3d& points, int num_threads, int sequential_threshold);

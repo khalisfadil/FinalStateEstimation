@@ -19,3 +19,8 @@ Montag, 7. Juli 2025 12:06
     - finished checking function icp
     - added glog in icp
     - finished recheck all function in lidarinertialodometry
+--------------------------------------------------------------------------------------------------------------------------
+Montag, 14. Juli 2025 13:58
+    - I have add subsampling outlier removal inside grid sampling. so that it will remove outlier.
+    - in the "register frame" the lidar point undergoes initialize frame without subsampling removal. then go grid sampling withoutlier removal.
+    - we can change this vice versa if we think its not working.

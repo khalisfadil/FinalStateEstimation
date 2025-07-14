@@ -19,6 +19,7 @@ namespace  stateestimate{
     // ########################################################################
     // sub_sample_frame
     // ########################################################################
+
     void lidarinertialodom::sub_sample_frame(std::vector<Point3D>& frame, double size_voxel, int num_threads, int sequential_threshold) {
 
         // Define a voxel map using tsl::robin_map (a fast hash map) to store one point per voxel
@@ -33,7 +34,7 @@ namespace  stateestimate{
             // Create a voxel map to store one point per voxel
             VoxelMap voxel_map;
             // Reserve space to reduce reallocation (estimate: ~1/4 of input size)
-            voxel_map.reserve(frame.size() / 4);
+            voxel_map.reserve(frame.size() / 2);
 
             // Step 2: Iterate through all points in the frame
             for (const auto& point : frame) {
@@ -118,6 +119,130 @@ namespace  stateestimate{
     }
 
     // ########################################################################
+    // sub_sample_frame_outlier_removal
+    // ########################################################################
+    
+    void lidarinertialodom::sub_sample_frame_outlier_removal(std::vector<Point3D>& frame, double size_voxel, int num_threads, int sequential_threshold) {
+
+        using VoxelMap = tsl::robin_map<Voxel, Point3D, VoxelHash>;
+
+        // Parameters for ROR (tune based on data)
+        const double ror_radius = size_voxel * std::sqrt(3.0);
+        const int ror_min_pts = 3;
+        const int k = static_cast<int>(std::ceil(ror_radius / size_voxel)) + 1;
+        const bool approximate = true;  // Set to false for exact distance checks (slower)
+
+        // Check if the input frame size is below the sequential threshold
+        if (frame.size() < static_cast<size_t>(sequential_threshold)) {
+            VoxelMap voxel_map;
+            voxel_map.reserve(frame.size() / 2);
+
+            for (const auto& point : frame) {
+                Voxel voxel = Voxel::Coordinates(point.pt, size_voxel);
+                voxel_map.try_emplace(voxel, point);
+            }
+
+            // Extract entries for potential parallelism (small N, but consistent)
+            std::vector<std::pair<Voxel, Point3D>> entries(voxel_map.begin(), voxel_map.end());
+
+            // Filter (sequential for small, but could parallel if needed)
+            frame.clear();
+            frame.reserve(entries.size());
+            for (const auto& entry : entries) {
+                const Voxel& v = entry.first;
+                const Point3D& p = entry.second;
+                int neighbor_count = 0;
+                for (int dx = -k; dx <= k; ++dx) {
+                    for (int dy = -k; dy <= k; ++dy) {
+                        for (int dz = -k; dz <= k; ++dz) {
+                            if (dx == 0 && dy == 0 && dz == 0) continue;
+                            Voxel neigh{v.x + dx, v.y + dy, v.z + dz};
+                            auto it = voxel_map.find(neigh);
+                            if (it != voxel_map.end()) {
+                                if (approximate || (p.pt - it->second.pt).norm() <= ror_radius) {
+                                    ++neighbor_count;
+                                }
+                            }
+                        }
+                    }
+                }
+                if (neighbor_count >= ror_min_pts) {
+                    frame.push_back(p);
+                }
+            }
+            frame.shrink_to_fit();
+            return;
+        }
+
+        // Parallel processing
+        struct VoxelPoint {
+            Voxel voxel;
+            Point3D point;
+        };
+
+        tbb::global_control gc(tbb::global_control::max_allowed_parallelism, num_threads);
+
+        tbb::concurrent_vector<VoxelPoint> voxel_points;
+        voxel_points.reserve(frame.size() / 2);
+
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, frame.size(), sequential_threshold),
+            [&](const tbb::blocked_range<size_t>& range) {
+                for (size_t i = range.begin(); i != range.end(); ++i) {
+                    const auto& pt = frame[i].pt;
+                    Voxel voxel = Voxel::Coordinates(pt, size_voxel);
+                    voxel_points.push_back({voxel, frame[i]});
+                }
+            });
+
+        VoxelMap voxel_map;
+        voxel_map.reserve(voxel_points.size());
+        for (const auto& vp : voxel_points) {
+            voxel_map.try_emplace(vp.voxel, vp.point);
+        }
+
+        // Extract entries for parallelism
+        std::vector<std::pair<Voxel, Point3D>> entries(voxel_map.begin(), voxel_map.end());
+
+        // Parallel filter: compute keep flags
+        std::vector<bool> keep(entries.size(), false);
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, entries.size(), sequential_threshold),
+            [&](const tbb::blocked_range<size_t>& range) {
+                for (size_t idx = range.begin(); idx != range.end(); ++idx) {
+                    const Voxel& v = entries[idx].first;
+                    const Point3D& p = entries[idx].second;
+                    int neighbor_count = 0;
+                    for (int dx = -k; dx <= k; ++dx) {
+                        for (int dy = -k; dy <= k; ++dy) {
+                            for (int dz = -k; dz <= k; ++dz) {
+                                if (dx == 0 && dy == 0 && dz == 0) continue;
+                                Voxel neigh{v.x + dx, v.y + dy, v.z + dz};
+                                auto it = voxel_map.find(neigh);
+                                if (it != voxel_map.end()) {
+                                    if (approximate || (p.pt - it->second.pt).norm() <= ror_radius) {
+                                        ++neighbor_count;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (neighbor_count >= ror_min_pts) {
+                        keep[idx] = true;
+                    }
+                }
+            });
+
+        // Rebuild frame sequentially
+        frame.clear();
+        frame.reserve(entries.size());
+        for (size_t idx = 0; idx < entries.size(); ++idx) {
+            if (keep[idx]) {
+                frame.push_back(entries[idx].second);
+            }
+        }
+        frame.shrink_to_fit();
+    }
+
+    // ########################################################################
     // grid_sampling
     // ########################################################################
 
@@ -143,9 +268,9 @@ namespace  stateestimate{
         }
 
         // Step 5: Apply voxel grid subsampling to frame_sub
-        // Calls sub_sample_frame to reduce the number of points by keeping one point per voxel
+        // Calls sub_sample_frame_outlier_removal to reduce the number of points by keeping one point per voxel
         // Modifies frame_sub in-place, using the provided voxel size, thread count, and threshold
-        sub_sample_frame(frame_sub, size_voxel_subsampling, num_threads, sequential_threshold);
+        sub_sample_frame_outlier_removal(frame_sub, size_voxel_subsampling, num_threads, sequential_threshold);
 
         // Step 6: Reserve space in keypoints to avoid reallocations
         // Uses the size of the downsampled frame_sub to estimate the required capacity
@@ -166,94 +291,86 @@ namespace  stateestimate{
     // compute_neighborhood_distribution
     // ########################################################################
 
+    // Assuming ArrayVector3d is std::vector<Eigen::Vector3d>
+    // and Neighborhood is a struct with: Eigen::Vector3d center, normal; Eigen::Matrix3d covariance; double a2D;
+
     lidarinertialodom::Neighborhood lidarinertialodom::compute_neighborhood_distribution(const ArrayVector3d& points, int num_threads, int sequential_threshold) {
+        Neighborhood neighborhood; // Assume default: center/normal=zero, covariance=identity, a2D=1.0
 
-        Neighborhood neighborhood;
-
-        // Handle empty or single-point cases
-        if (points.empty()) {
-            return neighborhood; // Default: zero center/normal, identity covariance, a2D=1.0
+        const size_t point_count = points.size();
+        if (point_count == 0) {
+            return neighborhood;
         }
-        if (points.size() == 1) {
+        if (point_count == 1) {
             neighborhood.center = points[0];
-            neighborhood.covariance = Eigen::Matrix3d::Zero();
-            neighborhood.normal = Eigen::Vector3d::UnitZ(); // Arbitrary default
-            neighborhood.a2D = 0.0; // Non-planar for single point
+            neighborhood.covariance.setZero();
+            neighborhood.normal = Eigen::Vector3d::UnitZ();
+            neighborhood.a2D = 0.0;
             return neighborhood;
         }
 
-        // Set TBB thread limit once for the entire function
         tbb::global_control gc(tbb::global_control::max_allowed_parallelism, num_threads);
 
-        // Single-pass computation for barycenter and covariance
         Eigen::Vector3d barycenter = Eigen::Vector3d::Zero();
-        Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
-        const size_t point_count = points.size();
+        Eigen::Matrix3d outer_sum = Eigen::Matrix3d::Zero(); // Renamed for clarity
 
         if (point_count < static_cast<size_t>(sequential_threshold)) {
-            // Sequential for small inputs
             for (const auto& point : points) {
                 barycenter += point;
-                covariance += point * point.transpose(); // Accumulate outer product
+                outer_sum += point * point.transpose();
             }
         } else {
-            // Parallel for large inputs
             struct Accumulator {
                 Eigen::Vector3d sum = Eigen::Vector3d::Zero();
-                Eigen::Matrix3d outer_sum = Eigen::Matrix3d::Zero();
+                Eigen::Matrix3d outer = Eigen::Matrix3d::Zero();
+                Accumulator& operator+=(const Accumulator& other) { // In-place reduce for efficiency
+                    sum += other.sum;
+                    outer += other.outer;
+                    return *this;
+                }
             };
             Accumulator result = tbb::parallel_reduce(
                 tbb::blocked_range<size_t>(0, point_count, sequential_threshold),
                 Accumulator(),
-                [&](const tbb::blocked_range<size_t>& range, Accumulator acc) {
-                    for (size_t i = range.begin(); i != range.end(); ++i) {
+                [&](const tbb::blocked_range<size_t>& range, Accumulator acc) -> Accumulator {
+                    for (size_t i = range.begin(); i < range.end(); ++i) {
                         acc.sum += points[i];
-                        acc.outer_sum += points[i] * points[i].transpose();
+                        acc.outer += points[i] * points[i].transpose();
                     }
                     return acc;
                 },
-                [](const Accumulator& a, const Accumulator& b) {
-                    Accumulator result;
-                    result.sum = a.sum + b.sum;
-                    result.outer_sum = a.outer_sum + b.outer_sum;
-                    return result;
+                [](Accumulator a, const Accumulator& b) -> Accumulator {
+                    return a += b; // Use in-place operator
                 }
             );
             barycenter = result.sum;
-            covariance = result.outer_sum;
+            outer_sum = result.outer;
         }
 
-        // Normalize barycenter and compute covariance
-        barycenter /= static_cast<double>(point_count);
-        covariance /= static_cast<double>(point_count);
-        covariance -= barycenter * barycenter.transpose(); // Finalize covariance
-
-        // Verify covariance symmetry (debug mode only)
-        // assert((covariance - covariance.transpose()).norm() < 1e-10 && "Covariance matrix is not symmetric");
-
+        const double inv_count = 1.0 / point_count;
+        barycenter *= inv_count;
         neighborhood.center = barycenter;
-        neighborhood.covariance = covariance;
 
-        // Compute eigenvalues and eigenvectors
-        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es(covariance);
+        neighborhood.covariance = (outer_sum * inv_count) - (barycenter * barycenter.transpose());
 
-        // Normal is eigenvector corresponding to smallest eigenvalue
-        neighborhood.normal = es.eigenvectors().col(0).normalized();
+    #ifdef DEBUG
+        assert((neighborhood.covariance - neighborhood.covariance.transpose()).norm() < 1e-10);
+    #endif
 
-        // Compute planarity coefficient (a2D): measures planarity (0 for planar, ~1 for isotropic)
-        double sigma_1 = std::sqrt(std::max(0.0, es.eigenvalues()[2])); // Largest
-        double sigma_2 = std::sqrt(std::max(0.0, es.eigenvalues()[1])); // Middle
-        double sigma_3 = std::sqrt(std::max(0.0, es.eigenvalues()[0])); // Smallest
-        constexpr double epsilon = 1e-6; // Avoid division by near-zero
-        neighborhood.a2D = sigma_1 > epsilon ? (sigma_2 - sigma_3) / sigma_1 : 0.0; // planatery coefficient
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es(neighborhood.covariance);
+        neighborhood.normal = es.eigenvectors().col(0).normalized(); // Smallest eigenvalue direction
 
-        // Check for NaN
-        // if (!std::isfinite(neighborhood.a2D)) {
-        //     throw std::runtime_error("Planarity coefficient is NaN");
-        // }
-        if (neighborhood.a2D != neighborhood.a2D) {
-            // LOG(ERROR) << "FOUND NAN!!!";
-            throw std::runtime_error("error");
+        // Eigenvalues sorted ascending: [0] smallest, [2] largest
+        const auto& evals = es.eigenvalues();
+        double sigma1 = std::sqrt(std::max(0.0, evals[2])); // Largest std. dev.
+        double sigma2 = std::sqrt(std::max(0.0, evals[1]));
+        double sigma3 = std::sqrt(std::max(0.0, evals[0])); // Smallest
+        constexpr double epsilon = 1e-6;
+        neighborhood.a2D = (sigma1 > epsilon) ? (sigma2 - sigma3) / sigma1 : 0.0; // ~1 for planar, ~0 for isotropic
+
+        if (!std::isfinite(neighborhood.a2D)) {
+            neighborhood.a2D = 0.0; // Fallback instead of throw for production robustness
+            throw std::runtime_error("Planarity coefficient is NaN");
         }
 
         return neighborhood;
@@ -263,35 +380,23 @@ namespace  stateestimate{
     // parse_json_options
     // ########################################################################
 
-    // Correctly define parse_json_options as a static member function
     lidarinertialodom::Options lidarinertialodom::parse_json_options(const std::string& json_path) {
         std::ifstream file(json_path);
-        if (!file.is_open()) {
-            // LOG(ERROR) << "Failed to open JSON file: " << json_path;
-            throw std::runtime_error("Failed to open JSON file: " + json_path);
-        }
+        if (!file.is_open()) {throw std::runtime_error("Failed to open JSON file: " + json_path);}
 
         nlohmann::json json_data;
         try {
             file >> json_data;
-        } catch (const nlohmann::json::parse_error& e) {
-            // LOG(ERROR) << "JSON parse error in " << json_path << ": " << e.what();
-            throw std::runtime_error("JSON parse error in " + json_path + ": " + e.what());
-        }
+        } catch (const nlohmann::json::parse_error& e) {throw std::runtime_error("JSON parse error in " + json_path + ": " + e.what());}
 
         lidarinertialodom::Options parsed_options;
 
-        if (!json_data.is_object()) {
-            // LOG(ERROR) << "JSON data must be an object";
-            throw std::runtime_error("JSON data must be an object");
-        }
+        if (!json_data.is_object()) {throw std::runtime_error("JSON data must be an object");}
 
         try {
             // Parse odometry_options object
-            if (!json_data.contains("odometry_options") || !json_data["odometry_options"].is_object()) {
-                // LOG(ERROR) << "Missing or invalid 'odometry_options' object";
-                throw std::runtime_error("Missing or invalid 'odometry_options' object");
-            }
+            if (!json_data.contains("odometry_options") || !json_data["odometry_options"].is_object()) {throw std::runtime_error("Missing or invalid 'odometry_options' object");}
+            
             const auto& odometry_options = json_data["odometry_options"];
             
             // Base Odometry::Options
@@ -341,10 +446,7 @@ namespace  stateestimate{
                 else if (loss_func == "DCS") parsed_options.p2p_loss_func = lidarinertialodom::LOSS_FUNC::DCS;
                 else if (loss_func == "CAUCHY") parsed_options.p2p_loss_func = lidarinertialodom::LOSS_FUNC::CAUCHY;
                 else if (loss_func == "GM") parsed_options.p2p_loss_func = lidarinertialodom::LOSS_FUNC::GM;
-                else {
-                    // LOG(ERROR) << "Invalid p2p_loss_func: " << loss_func;
-                    throw std::runtime_error("Invalid p2p_loss_func: " + loss_func);
-                }
+                else {throw std::runtime_error("Invalid p2p_loss_func: " + loss_func);}
             }
             if (odometry_options.contains("p2p_loss_sigma")) parsed_options.p2p_loss_sigma = odometry_options["p2p_loss_sigma"].get<double>();
             if (odometry_options.contains("use_rv")) parsed_options.use_rv = odometry_options["use_rv"].get<bool>();
@@ -356,10 +458,7 @@ namespace  stateestimate{
                 else if (loss_func == "DCS") parsed_options.rv_loss_func = lidarinertialodom::LOSS_FUNC::DCS;
                 else if (loss_func == "CAUCHY") parsed_options.rv_loss_func = lidarinertialodom::LOSS_FUNC::CAUCHY;
                 else if (loss_func == "GM") parsed_options.rv_loss_func = lidarinertialodom::LOSS_FUNC::GM;
-                else {
-                    // LOG(ERROR) << "Invalid rv_loss_func: " << loss_func;
-                    throw std::runtime_error("Invalid rv_loss_func: " + loss_func);
-                }
+                else {throw std::runtime_error("Invalid rv_loss_func: " + loss_func);}
             }
             if (odometry_options.contains("rv_cov_inv")) parsed_options.rv_cov_inv = odometry_options["rv_cov_inv"].get<double>();
             if (odometry_options.contains("rv_loss_threshold")) parsed_options.rv_loss_threshold = odometry_options["rv_loss_threshold"].get<double>();
@@ -447,10 +546,8 @@ namespace  stateestimate{
             if (odometry_options.contains("break_icp_early")) parsed_options.break_icp_early = odometry_options["break_icp_early"].get<bool>();
             if (odometry_options.contains("use_line_search")) parsed_options.use_line_search = odometry_options["use_line_search"].get<bool>();
             if (odometry_options.contains("use_accel")) parsed_options.use_accel = odometry_options["use_accel"].get<bool>();
-        } catch (const nlohmann::json::exception& e) {
-            // LOG(ERROR) << "JSON parsing error in metadata: " << e.what();
-            throw std::runtime_error("JSON parsing error in metadata: " + std::string(e.what()));
-        }
+        } catch (const nlohmann::json::exception& e) {throw std::runtime_error("JSON parsing error in metadata: " + std::string(e.what()));}
+
         return parsed_options;
     }
 
@@ -488,18 +585,21 @@ namespace  stateestimate{
         // Open file with error handling
         std::ofstream trajectory_file(filename, std::ios::out);
         if (!trajectory_file.is_open()) {
-            // LOG(ERROR) << "Failed to open trajectory file: " << filename;
+            throw std::runtime_error("Failed to open: " + filename);
             return; // Avoid further operations if file cannot be opened
         }
-        // LOG(INFO) << "Building full trajectory." << std::endl;
+#ifdef DEBUG
+            std::cout << "Building full trajectory." << std::endl;
+#endif
 
         // Build full trajectory
         auto full_trajectory =  finalicp::traj::const_acc::Interface::MakeShared(options_.qc_diag);
         for (const auto& var : trajectory_vars_) {
             full_trajectory->add(var.time, var.T_rm, var.w_mr_inr, var.dw_mr_inr);
         }
-        
-        // LOG(INFO) << "Dumping trajectory." << std::endl;
+#ifdef DEBUG
+            std::cout << "Dumping trajectory." << std::endl;
+#endif
 
         // Buffer output in stringstream
         std::stringstream buffer;
@@ -527,7 +627,9 @@ namespace  stateestimate{
         trajectory_file << buffer.str();
         trajectory_file.close();
 
-        // LOG(INFO) << "Dumping trajectory. - DONE" << std::endl;
+#ifdef DEBUG
+        std::cout << "Dumping trajectory. - DONE" << std::endl;
+#endif
     }
 
     // ########################################################################
@@ -601,13 +703,14 @@ namespace  stateestimate{
     auto lidarinertialodom::registerFrame(const DataFrame &const_frame) -> RegistrationSummary {
         RegistrationSummary summary;
 
+#ifdef DEBUG
         // Initialize timers for performance debugging if enabled
         std::vector<std::pair<std::string, std::unique_ptr<finalicp::Stopwatch<>>>> timer;
-        if (options_.debug_print) {
-            timer.emplace_back("initialization ..................... ", std::make_unique<finalicp::Stopwatch<>>(false));
-            timer.emplace_back("icp ................................ ", std::make_unique<finalicp::Stopwatch<>>(false));
-            timer.emplace_back("updateMap .......................... ", std::make_unique<finalicp::Stopwatch<>>(false));
-        }
+        timer.emplace_back("initialization ..................... ", std::make_unique<finalicp::Stopwatch<>>(false));
+        timer.emplace_back("gridsampling ....................... ", std::make_unique<finalicp::Stopwatch<>>(false));
+        timer.emplace_back("icp ................................ ", std::make_unique<finalicp::Stopwatch<>>(false));
+        timer.emplace_back("updateMap .......................... ", std::make_unique<finalicp::Stopwatch<>>(false));
+#endif
 
         // Step 1: Validate input point cloud
         // Check if the input point cloud is empty; return failure if so
@@ -624,9 +727,14 @@ namespace  stateestimate{
 
         // Step 4: Process input point cloud
         // Convert and prepare the point cloud for registration
+#ifdef DEBUG
         if (!timer.empty()) timer[0].second->start();
+#endif
         auto frame = initializeFrame(index_frame, const_frame.pointcloud);              //####!!! 3 tbb included
+
+#ifdef DEBUG
         if (!timer.empty()) timer[0].second->stop();
+#endif
 
         // Step 5: Process frame based on frame index
         // Handle first frame initialization or subsequent frame registration
@@ -639,17 +747,28 @@ namespace  stateestimate{
 
             // Step 5a: Downsample point cloud
             // Reduce point cloud density using grid sampling for efficiency
+#ifdef DEBUG
             if (!timer.empty()) timer[1].second->start();
+#endif
             grid_sampling(frame, keypoints, sample_voxel_size, options_.num_threads, options_.sequential_threshold);   //####!!! 4
-            if (!timer.empty()) timer[1].second->stop();
 
+#ifdef DEBUG
+            if (!timer.empty()) timer[1].second->stop();
+#endif
             // Step 5b: Perform Iterative Closest Point (ICP) registration
             // Align current frame with previous frames using IMU and pose data
             const auto& imu_data_vec = const_frame.imu_data_vec;
             const auto& pose_data_vec = const_frame.pose_data_vec;
-            if (!timer.empty()) timer[1].second->start();
+
+#ifdef DEBUG
+            if (!timer.empty()) timer[2].second->start();
+#endif
+
             summary.success = icp(index_frame, keypoints, imu_data_vec, pose_data_vec); //####!!! 5
-            if (!timer.empty()) timer[1].second->stop();
+
+#ifdef DEBUG
+            if (!timer.empty()) timer[2].second->stop();
+#endif
             summary.keypoints = keypoints;
             if (!summary.success) {return summary;}
         } else {
@@ -660,7 +779,9 @@ namespace  stateestimate{
             using namespace finalicp::vspace;
             using namespace finalicp::traj;
 
-            if (!timer.empty()) timer[0].second->start();
+#ifdef DEBUG
+            if (!timer.empty()) timer[2].second->start();
+#endif
 
             // Define initial transformations and velocities
             math::se3::Transformation T_rm;
@@ -711,7 +832,10 @@ namespace  stateestimate{
             trajectory_[index_frame].end_dw_mr_inr_cov = P0_accel;
 
             summary.success = true;
-            if (!timer.empty()) timer[0].second->stop();
+
+#ifdef DEBUG
+            if (!timer.empty()) timer[2].second->stop();
+#endif
         }
 
         // Step 6: Store processed points
@@ -720,13 +844,19 @@ namespace  stateestimate{
 
         // Step 7: Update the map
         // Incorporate points into the global map, with optional delay
-        if (!timer.empty()) timer[2].second->start();
+#ifdef DEBUG
+        if (!timer.empty()) timer[3].second->start();
+#endif
+
         if (index_frame == 0) {
             updateMap(index_frame, index_frame);                                        //####!!! 7
         } else if ((index_frame - options_.delay_adding_points) > 0) {
             updateMap(index_frame, index_frame - options_.delay_adding_points);
         }
-        if (!timer.empty()) timer[2].second->stop();
+
+#ifdef DEBUG
+        if (!timer.empty()) timer[3].second->stop();
+#endif
 
         // Step 8: Correct point cloud positions
         // Apply transformations to correct point positions based on trajectory
@@ -782,12 +912,12 @@ namespace  stateestimate{
 
         // Step 10: Output debug timers
         // Print timing information if debug mode is enabled
-        // LOG(INFO) << "OUTER LOOP TIMERS" << std::endl;
-        // if (options_.debug_print) {
-            // for (size_t i = 0; i < timer.size(); i++)
-            // LOG(INFO) << "Elapsed " << timer[i].first << *(timer[i].second) << std::endl;
-        // }
-
+#ifdef DEBUG
+            std::cout << "OUTER LOOP TIMERS" << std::endl;
+            for (size_t i = 0; i < timer.size(); i++) {
+                std::cout << "Elapsed " << timer[i].first << *(timer[i].second) << std::endl;
+            }
+#endif
         return summary;
     }
 
@@ -1001,8 +1131,10 @@ namespace  stateestimate{
             }
         }
 
-        // LOG(INFO) << "Adding points to map between (inclusive): " << begin_slam_time.seconds() << " - "
-            // << end_slam_time.seconds() << ", with num states: " << num_states << std::endl;
+#ifdef DEBUG
+        std::cout << "Adding points to map between (inclusive): " << begin_slam_time.seconds() << " - "
+             << end_slam_time.seconds() << ", with num states: " << num_states << std::endl;
+#endif
 
         // Collect unique timestamps
         std::set<double> unique_point_times_set;
@@ -1177,13 +1309,15 @@ namespace  stateestimate{
         finalicp::GaussNewtonSolverNVA solver(problem, params);
         solver.optimize();
 
-        // Validate result
-        // LOG(INFO) << "Initialization, T_mi:" << std::endl 
-            // << T_mi_var->value().matrix() << std::endl
-            // << "vec: " << T_mi_var->value().vec() << std::endl;
+#ifdef DEBUG
+        std::cout<< "Initialization, T_mi:" << std::endl 
+             << T_mi_var->value().matrix() << std::endl
+             << "vec: " << T_mi_var->value().vec() << std::endl;
+#endif
         
         return T_mi_var->value().vec();
     }
+
 
     // ########################################################################
     // icp 
@@ -1205,20 +1339,26 @@ namespace  stateestimate{
 
         // Step 2: Set up timers to measure performance (if debugging is enabled)
         // timer stores pairs of labels (e.g., "Initialization") and Stopwatch objects
+#ifdef DEBUG
         std::vector<std::pair<std::string, std::unique_ptr<finalicp::Stopwatch<>>>> timer;
-        if (options_.debug_print) {
-            // Add timers for different ICP phases (only if debug_print is true)
-            timer.emplace_back("Update Transform ............... ", std::make_unique<finalicp::Stopwatch<>>(false));
-            timer.emplace_back("Association .................... ", std::make_unique<finalicp::Stopwatch<>>(false));
-            timer.emplace_back("Optimization ................... ", std::make_unique<finalicp::Stopwatch<>>(false));
-            timer.emplace_back("Alignment ...................... ", std::make_unique<finalicp::Stopwatch<>>(false));
-            timer.emplace_back("Initialization ................. ", std::make_unique<finalicp::Stopwatch<>>(false));
-            timer.emplace_back("Marginalization ................ ", std::make_unique<finalicp::Stopwatch<>>(false));
-        }
+        // Add timers for different ICP phases (only if debug_print is true)
+        timer.emplace_back("Update Transform ............... ", std::make_unique<finalicp::Stopwatch<>>(false));
+        timer.emplace_back("Association .................... ", std::make_unique<finalicp::Stopwatch<>>(false));
+        timer.emplace_back("Optimization ................... ", std::make_unique<finalicp::Stopwatch<>>(false));
+        timer.emplace_back("Alignment ...................... ", std::make_unique<finalicp::Stopwatch<>>(false));
+        timer.emplace_back("Initialization ................. ", std::make_unique<finalicp::Stopwatch<>>(false));
+        timer.emplace_back("Marginalization ................ ", std::make_unique<finalicp::Stopwatch<>>(false));
+#endif
 
         // Step 3: Start the initialization timer (timer[4] = "Initialization")
         // Measures time taken to set up the SLAM trajectory
+        // ######################################################################################
+        // INITIALIZATION
+        // ######################################################################################
+
+#ifdef DEBUG
         if (!timer.empty()) timer[4].second->start();
+#endif
 
         // Step 4: Create a new SLAM_TRAJ using singer::Interface
         // singer::Interface models the robot's trajectory (pose, velocity, etc.) over time
@@ -1244,8 +1384,9 @@ namespace  stateestimate{
 
         // Step 7: Validate inputs and previous state
         // Ensure index_frame is valid and trajectory_vars_ is not empty
-        // Logging system
-        // LOG(INFO) << "[ICP] prev scan end time: " << trajectory_[index_frame - 1].end_timestamp << std::endl;
+#ifdef DEBUG
+        std::cout << "[ICP] prev scan end time: " << trajectory_[index_frame - 1].end_timestamp << std::endl;
+#endif
         
 
         // Step 8: Get the previous frame's end timestamp
@@ -1321,8 +1462,9 @@ namespace  stateestimate{
         }
 
         ///################################################################################
-        // LOG(INFO) << "[ICP] curr scan end time: " << trajectory_[index_frame].end_timestamp << std::endl;
-        // LOG(INFO) << "[ICP] total num new states: " << 1 << std::endl;
+#ifdef DEBUG
+        std::cout << "[ICP] curr scan end time: " << trajectory_[index_frame].end_timestamp << std::endl;
+#endif
 
         // Step 17: Get the current frame’s end timestamp
         // curr_time tells us when this frame ends
@@ -1406,7 +1548,7 @@ namespace  stateestimate{
                 T_mi_var->locked() = true; // Lock T_mi if ground truth or init-only
                 trajectory_vars_.emplace_back(knot_slam_time, T_rm_var, w_mr_inr_var, dw_mr_inr_var, imu_biases_var, T_mi_var);
             } else {
-                 if (options_.use_imu) {
+                if (options_.use_imu) {
                     if (options_.T_mi_init_only) {
                         T_mi_var->locked() = true;
                     } else {
@@ -1536,10 +1678,14 @@ namespace  stateestimate{
             }
         }
 
-        // Step 26: Stop the initialization timer
-        // Marks the end of the initialization phase (already handled in Step 18, included for completeness)
+            // Step 26: Stop the initialization timer
+            // Marks the end of the initialization phase (already handled in Step 18, included for completeness)
+#ifdef DEBUG
         if (!timer.empty()) timer[4].second->stop();
-
+#endif
+        
+        ///################################################################################
+        // MARGINALIZATION
         ///################################################################################
 
         // Step 28: Update sliding window variables
@@ -1547,7 +1693,9 @@ namespace  stateestimate{
         {
             // Step 27: Start the marginalization timer
             // Timer[5] measures the time taken to update the sliding window filter
+#ifdef DEBUG
             if (!timer.empty()) timer[5].second->start();
+#endif
 
             // For the initial frame, include the previous frame’s state variables
             if (index_frame == 1) {
@@ -1629,15 +1777,18 @@ namespace  stateestimate{
             }
 
             // Step 30: Stop the marginalization timer
+#ifdef DEBUG
             if (!timer.empty()) timer[5].second->stop();
-        }
+#endif
 
-        
+        }
 
         ///################################################################################
         // Step 31: Restart the initialization timer for query point evaluation
         // Timer[4] measures the time taken to process query points and IMU cost terms
+#ifdef DEBUG
         if (!timer.empty()) timer[4].second->start();
+#endif
 
         // Step 32: Collect unique timestamps from keypoints for query point evaluation
         // unique_point_times lists distinct timestamps to query the SLAM trajectory
@@ -1816,7 +1967,10 @@ namespace  stateestimate{
 
         // Step 36: Cache interpolation matrices for unique keypoint timestamps
         // interp_mats_ stores matrices (omega, lambda) for efficient pose interpolation
+#ifdef DEBUG
         timer[0].second->start(); // Start update transform timer
+#endif
+
         interp_mats_.clear(); // Clear previous interpolation matrices
         const double time1 = prev_slam_time.seconds(); // Start time of the trajectory segment
         const double time2 = KNOT_TIMES.back(); // End time of the trajectory segment
@@ -1866,7 +2020,10 @@ namespace  stateestimate{
                 interp_mats_.emplace(entry.first, entry.second);
             }
         }
+
+#ifdef DEBUG
         timer[0].second->stop(); // Stop update transform timer
+#endif
 
         // Step 37: Transform keypoints to the map frame using interpolated poses
         // Lambda function to map raw keypoints to the map frame
@@ -1998,15 +2155,19 @@ namespace  stateestimate{
         }
         const auto p2p_super_cost_term = finalicp::P2PSuperCostTerm::MakeShared(SLAM_TRAJ, prev_slam_time, finalicp::traj::Time(KNOT_TIMES.back()), p2p_options);
 
+#ifdef DEBUG
         // Step 39: Stop the initialization timer
         if (!timer.empty()) timer[4].second->stop();
+#endif
 
         ///################################################################################
 
         // Step 40: Transform keypoints to the robot frame (if using point-to-plane super cost term)
         // Applies the inverse sensor-to-robot transformation (T_rs) to raw keypoint coordinates
         #if USE_P2P_SUPER_COST_TERM
+#ifdef DEBUG
             timer[0].second->start(); // Start update transform timer
+#endif
             const Eigen::Matrix4d T_rs_mat = options_.T_sr.inverse(); // Inverse sensor-to-robot transformation
 
             if (keypoints.size() < static_cast<size_t>(options_.sequential_threshold)) {
@@ -2037,7 +2198,10 @@ namespace  stateestimate{
                     keypoints[i] = temp_keypoints[i];
                 }
             }
+
+#ifdef  DEBUG
             timer[0].second->stop(); // Stop update transform timer
+#endif
         #endif
 
         // Step 41: Initialize the current frame’s pose estimate
@@ -2101,7 +2265,9 @@ namespace  stateestimate{
             }
 
             // Step 44: Clear measurement cost terms and prepare for association
+#ifdef DEBUG
             timer[1].second->start(); // Start association timer
+#endif
             meas_cost_terms.clear(); // Clear previous measurement cost terms
             p2p_matches.clear(); // Clear previous point-to-plane matches
 
@@ -2284,20 +2450,26 @@ namespace  stateestimate{
                 problem->addCostTerm(imu_super_cost_term); // Add IMU super cost term
             }
 
+#ifdef DEBUG
             timer[1].second->stop(); // Stop association timer
+#endif
 
             // Step 46: Check for sufficient keypoints
             // Ensures enough matches for reliable optimization
             if (N_matches < options_.min_number_keypoints) {
-                // LOG(ERROR) << "[ICP]Error : not enough keypoints selected in ct-icp !" << std::endl;
-                // LOG(ERROR) << "[ICP]Number_of_residuals : " << N_matches << std::endl;
+#ifdef DEBUG
+                std::cout << "[ICP]Error : not enough keypoints selected in ct-icp !" << std::endl;
+                std::cout << "[ICP]Number_of_residuals : " << N_matches << std::endl;
+#endif
                 icp_success = false;
                 break; // Exit the ICP loop if insufficient keypoints
             }
 
             // Step 47: Solve the optimization problem
             // Uses Gauss-Newton solver to refine the trajectory
+#ifdef DEBUG
             timer[2].second->start(); // Start optimization timer
+#endif
             finalicp::GaussNewtonSolverNVA::Params params;
             params.verbose = options_.verbose;
             params.max_iterations = static_cast<unsigned int>(options_.max_iterations);
@@ -2305,11 +2477,16 @@ namespace  stateestimate{
             params.reuse_previous_pattern = !swf_inside_icp; // Disable pattern reuse for sliding window filter
             finalicp::GaussNewtonSolverNVA solver(*problem, params);
             solver.optimize(); // Solve the optimization problem
+#ifdef DEBUG
             timer[2].second->stop(); // Stop optimization timer
+#endif
 
             // Step 48: Update the trajectory estimate and check convergence
             // Computes differences in pose, velocity, and acceleration to determine if converged
+#ifdef DEBUG
             timer[3].second->start(); // Start alignment timer
+#endif
+
             double diff_trans = 0.0, diff_rot = 0.0, diff_vel = 0.0, diff_acc = 0.0;
 
             // Update begin pose
@@ -2369,9 +2546,9 @@ namespace  stateestimate{
                 }
                 current_estimate.mid_b = trajectory_vars_[i].imu_biases->value();
             }
-
-            // LOG(INFO) << "diff_rot: " << diff_rot << " diff_trans: " << diff_trans << " diff_vel: " << diff_vel << " diff_acc: " << diff_acc << std::endl;
-
+#ifdef DEBUG
+            std::cout << "diff_rot: " << diff_rot << " diff_trans: " << diff_trans << " diff_vel: " << diff_vel << " diff_acc: " << diff_acc << std::endl;
+#endif
             // Check convergence
             if (index_frame > 1 &&
                 diff_rot < options_.threshold_orientation_norm &&
@@ -2379,7 +2556,9 @@ namespace  stateestimate{
                 diff_vel < (options_.threshold_translation_norm * 10.0 + options_.threshold_orientation_norm * 10.0) &&
                 diff_acc < (options_.threshold_translation_norm * 100.0 + options_.threshold_orientation_norm * 100.0)) {
                 if (options_.debug_print) {
-                    // LOG(INFO) << "ICP: Finished with N=" << iter << " ICP iterations" << std::endl;
+#ifdef DEBUG
+                    std::cout << "ICP: Finished with N=" << iter << " ICP iterations" << std::endl;
+#endif
                 }
                 if (options_.break_icp_early) {
                     break; // Exit loop if converged and early breaking is enabled
@@ -2387,11 +2566,14 @@ namespace  stateestimate{
             }
 
             // Re-transform keypoints for the next iteration
+#ifdef DEBUG
             timer[0].second->start(); // Start update transform timer
+#endif
             transform_keypoints(); // Updates keypoints.pt using the latest trajectory
+#ifdef DEBUG
             timer[0].second->stop(); // Stop update transform timer
-
             timer[3].second->stop(); // Stop alignment timer
+#endif
         } // End ICP optimization loop
         
         ///################################################################################
@@ -2422,8 +2604,10 @@ namespace  stateestimate{
             sliding_window_filter_->addCostTerm(imu_super_cost_term); // Add IMU super cost term
         }
 
-        // LOG(INFO) << "number of variables: " << sliding_window_filter_->getNumberOfVariables() << std::endl;
-        // LOG(INFO) << "number of cost terms: " << sliding_window_filter_->getNumberOfCostTerms() << std::endl;
+#ifdef DEBUG
+        std::cout << "number of variables: " << sliding_window_filter_->getNumberOfVariables() << std::endl;
+        std::cout << "number of cost terms: " << sliding_window_filter_->getNumberOfCostTerms() << std::endl;
+#endif
 
         // Step 50: Validate and optimize the sliding window filter
         // Checks variable and cost term counts, then solves the optimization problem
@@ -2501,25 +2685,27 @@ namespace  stateestimate{
 
             const auto bias_intp_eval = finalicp::vspace::VSpaceInterpolator<6>::MakeShared(curr_mid_slam_time, trajectory_vars_[i].imu_biases, trajectory_vars_[i].time, trajectory_vars_[i + 1].imu_biases, trajectory_vars_[i + 1].time);
             current_estimate.mid_b = bias_intp_eval->value();
-            // LOG(INFO) << "mid_T_mi: " << current_estimate.mid_T_mi << std::endl;
-            // LOG(INFO) << "b_begin: " << trajectory_vars_[i].imu_biases->value().transpose() << std::endl;
-            // LOG(INFO) << "b_end: " << trajectory_vars_[i + 1].imu_biases->value().transpose() << std::endl;
+#ifdef DEBUG
+            std::cout << "mid_T_mi: " << current_estimate.mid_T_mi << std::endl;
+            std::cout << "b_begin: " << trajectory_vars_[i].imu_biases->value().transpose() << std::endl;
+            std::cout << "b_end: " << trajectory_vars_[i + 1].imu_biases->value().transpose() << std::endl;
+#endif
         }
 
         // Step 54: Validate final estimate parameters
         // Ensures keypoints, velocities, and accelerations are valid
-        // LOG(INFO) << "Number of keypoints used in CT-ICP : " << N_matches << std::endl;
-        // LOG(INFO) << "v_begin: " << v_begin.transpose() << std::endl;
-        // LOG(INFO) << "v_end: " << v_end.transpose() << std::endl;
-        // LOG(INFO) << "a_begin: " << a_begin.transpose() << std::endl;
-        // LOG(INFO) << "a_end: " << a_end.transpose() << std::endl;
+#ifdef DEBUG
+        std::cout << "Number of keypoints used in CT-ICP : " << N_matches << std::endl;
+        std::cout << "v_begin: " << v_begin.transpose() << std::endl;
+        std::cout << "v_end: " << v_end.transpose() << std::endl;
+        std::cout << "a_begin: " << a_begin.transpose() << std::endl;
+        std::cout << "a_end: " << a_end.transpose() << std::endl;
 
-        // if (options_.debug_print) {
-            // for (size_t i = 0; i < timer.size(); i++) {LOG(INFO) << "Elapsed " << timer[i].first << *(timer[i].second) << std::endl;}
-            // LOG(INFO) << "Number iterations CT-ICP : " << options_.num_iters_icp << std::endl;
-            // LOG(INFO) << "Translation Begin: " << trajectory_[index_frame].begin_t.transpose() << std::endl;
-            // LOG(INFO) << "Translation End: " << trajectory_[index_frame].end_t.transpose() << std::endl;
-        // }
+        for (size_t i = 0; i < timer.size(); i++) {std::cout << "Elapsed " << timer[i].first << *(timer[i].second) << std::endl;}
+        std::cout << "Number iterations CT-ICP : " << options_.num_iters_icp << std::endl;
+        std::cout << "Translation Begin: " << trajectory_[index_frame].begin_t.transpose() << std::endl;
+        std::cout << "Translation End: " << trajectory_[index_frame].end_t.transpose() << std::endl;
+#endif
 
         // Step 55: Return success status
         // Completes the icp function, returning whether the frame was successfully processed
