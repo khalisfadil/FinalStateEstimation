@@ -54,7 +54,7 @@ namespace stateestimate {
             // optimization
             bool verbose = false;
             int max_iterations = 5;
-            int sequential_threshold = 100;
+            int sequential_threshold = 500;
             unsigned int num_threads = 4;
             int delay_adding_points = 4;
             bool use_final_state_value = false;

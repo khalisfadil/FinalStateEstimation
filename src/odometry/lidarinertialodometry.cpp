@@ -81,8 +81,7 @@ namespace  stateestimate{
         // Use TBB's parallel_for to process the frame in parallel
         // blocked_range divides the range [0, frame.size()) into chunks
         // sequential_threshold is used as the grain size for load balancing
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, frame.size(), sequential_threshold),
-            [&](const tbb::blocked_range<size_t>& range) {
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, frame.size(), sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                 // Iterate over the assigned range of indices
                 for (size_t i = range.begin(); i != range.end(); ++i) {
                     // Get the 3D coordinates of the current point
@@ -185,8 +184,7 @@ namespace  stateestimate{
         tbb::concurrent_vector<VoxelPoint> voxel_points;
         voxel_points.reserve(frame.size() / 2);
 
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, frame.size(), sequential_threshold),
-            [&](const tbb::blocked_range<size_t>& range) {
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, frame.size(), sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                 for (size_t i = range.begin(); i != range.end(); ++i) {
                     const auto& pt = frame[i].pt;
                     Voxel voxel = Voxel::Coordinates(pt, size_voxel);
@@ -205,8 +203,7 @@ namespace  stateestimate{
 
         // Parallel filter: compute keep flags
         std::vector<bool> keep(entries.size(), false);
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, entries.size(), sequential_threshold),
-            [&](const tbb::blocked_range<size_t>& range) {
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, entries.size(), sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                 for (size_t idx = range.begin(); idx != range.end(); ++idx) {
                     const Voxel& v = entries[idx].first;
                     const Point3D& p = entries[idx].second;
@@ -416,6 +413,8 @@ namespace  stateestimate{
             if (odometry_options.contains("threshold_orientation_norm")) parsed_options.threshold_orientation_norm = odometry_options["threshold_orientation_norm"].get<double>();
             if (odometry_options.contains("threshold_translation_norm")) parsed_options.threshold_translation_norm = odometry_options["threshold_translation_norm"].get<double>();
             if (odometry_options.contains("min_number_keypoints")) parsed_options.min_number_keypoints = odometry_options["min_number_keypoints"].get<int>();
+            if (odometry_options.contains("sequential_threshold_odom")) parsed_options.sequential_threshold_odom = odometry_options["sequential_threshold_odom"].get<int>();
+            if (odometry_options.contains("num_threads_odom")) parsed_options.num_threads_odom = odometry_options["num_threads_odom"].get<unsigned int>();
             if (odometry_options.contains("debug_print")) parsed_options.debug_print = odometry_options["debug_print"].get<bool>();
             if (odometry_options.contains("debug_path")) parsed_options.debug_path = odometry_options["debug_path"].get<std::string>();
 
@@ -882,8 +881,7 @@ namespace  stateestimate{
                 // Use TBB for parallel processing of large point clouds
                 tbb::concurrent_vector<Point3D> concurrent_points(const_frame.pointcloud.begin(), const_frame.pointcloud.end());
                 tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, concurrent_points.size(), options_.sequential_threshold),
-                    [&](const tbb::blocked_range<size_t>& range) {
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, concurrent_points.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                         auto q_begin = Eigen::Quaterniond(traj.begin_R);
                         auto q_end = Eigen::Quaterniond(traj.end_R);
                         const Eigen::Vector3d t_begin = traj.begin_t;
@@ -1062,8 +1060,7 @@ namespace  stateestimate{
         } else {
             // Parallel processing with TBB
             tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
-            tbb::parallel_for(tbb::blocked_range<size_t>(0, frame.size(), options_.sequential_threshold),
-                [&](const tbb::blocked_range<size_t>& range) {
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, frame.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                     for (size_t i = range.begin(); i != range.end(); ++i) {
                         auto& point = frame[i];
                         const double alpha = point.alpha_timestamp;
@@ -1159,8 +1156,7 @@ namespace  stateestimate{
             // Parallel pose interpolation with TBB
             tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
             tbb::concurrent_vector<Eigen::Matrix4d> T_ms_cache(unique_point_times.size());
-            tbb::parallel_for(tbb::blocked_range<size_t>(0, unique_point_times.size(), options_.sequential_threshold),
-                [&](const tbb::blocked_range<size_t>& range) {
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, unique_point_times.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                     for (size_t jj = range.begin(); jj != range.end(); ++jj) {
                         const auto& ts = unique_point_times[jj];
                         const auto T_rm_intp_eval = update_trajectory->getPoseInterpolator(finalicp::traj::Time(ts));
@@ -1189,8 +1185,7 @@ namespace  stateestimate{
         } else {
             // Parallel point transformation with TBB
             tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
-            tbb::parallel_for(tbb::blocked_range<size_t>(0, frame.size(), options_.sequential_threshold),
-                [&](const tbb::blocked_range<size_t>& range) {
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, frame.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                     for (size_t i = range.begin(); i != range.end(); ++i) {
                         auto& point = frame[i];
                         try {
@@ -1267,8 +1262,7 @@ namespace  stateestimate{
             // Parallel cost term creation with tbb::concurrent_vector
             tbb::concurrent_vector<finalicp::BaseCostTerm::ConstPtr> concurrent_cost_terms(imu_data_vec.size());
             tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
-            tbb::parallel_for(tbb::blocked_range<size_t>(0, imu_data_vec.size(), options_.sequential_threshold),
-                [&](const tbb::blocked_range<size_t>& range) {
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, imu_data_vec.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                     for (size_t i = range.begin(); i != range.end(); ++i) {
                         const auto& imu_data = imu_data_vec[i];
                         auto acc_error_func = finalicp::imu::AccelerationError(T_rm_init, dw_mr_inr, bias, T_mi_var, imu_data.lin_acc);
@@ -1999,8 +1993,7 @@ namespace  stateestimate{
             // Parallel: Process timestamps concurrently with TBB
             tbb::concurrent_hash_map<double, std::pair<Matrix18d, Matrix18d>> temp_interp_mats;
             tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
-            tbb::parallel_for(tbb::blocked_range<size_t>(0, unique_point_times.size(), options_.sequential_threshold),
-                [&](const tbb::blocked_range<size_t>& range) {
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, unique_point_times.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                     for (size_t i = range.begin(); i != range.end(); ++i) {
                         const double time = unique_point_times[i];
                         const double tau = time - time1; // Time offset from start
@@ -2071,8 +2064,7 @@ namespace  stateestimate{
                 // Parallel: Process timestamps concurrently with TBB
                 tbb::concurrent_hash_map<double, Eigen::Matrix4d> temp_cache_map;
                 tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, unique_point_times.size(), options_.sequential_threshold),
-                    [&](const tbb::blocked_range<size_t>& range) {
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, unique_point_times.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                         for (size_t jj = range.begin(); jj != range.end(); ++jj) {
                             const double ts = unique_point_times[jj];
                             const auto& omega = interp_mats_.at(ts).first;
@@ -2114,8 +2106,7 @@ namespace  stateestimate{
                     temp_keypoints[jj] = keypoints[jj];
                 }
                 tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, keypoints.size(), options_.sequential_threshold),
-                    [&](const tbb::blocked_range<size_t>& range) {
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, keypoints.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                         for (size_t jj = range.begin(); jj != range.end(); ++jj) {
                             auto& keypoint = temp_keypoints[jj];
                             const Eigen::Matrix4d& T_mr = T_mr_cache_map.at(keypoint.timestamp);
@@ -2185,8 +2176,7 @@ namespace  stateestimate{
                     temp_keypoints[i] = keypoints[i];
                 }
                 tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, keypoints.size(), options_.sequential_threshold),
-                    [&](const tbb::blocked_range<size_t>& range) {
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, keypoints.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                         for (size_t i = range.begin(); i != range.end(); ++i) {
                             auto& keypoint = temp_keypoints[i];
                             keypoint.raw_pt = T_rs_mat.block<3, 3>(0, 0) * keypoint.raw_pt + T_rs_mat.block<3, 1>(0, 3); // Transform raw point
@@ -2348,8 +2338,7 @@ namespace  stateestimate{
                 #endif
 
                 tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, keypoints.size(), options_.sequential_threshold),
-                    [&](const tbb::blocked_range<size_t>& range) {
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, keypoints.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                         for (size_t i = range.begin(); i != range.end(); ++i) {
                             const auto& keypoint = keypoints[i];
                             const auto& pt_keypoint = keypoint.pt;

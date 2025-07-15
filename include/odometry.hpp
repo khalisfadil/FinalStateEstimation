@@ -50,6 +50,10 @@ namespace stateestimate {
             double threshold_translation_norm = 0.001;   // Threshold on translation (m) for ICP's stopping criterion
             int min_number_keypoints = 100;
 
+            // parallel processing
+            int sequential_threshold_odom = 500;
+            unsigned int num_threads_odom = 4;
+
             bool debug_print = false;  // Whether to output debug information to std::cout
             std::string debug_path = "../report/traj/";
         };
@@ -63,7 +67,9 @@ namespace stateestimate {
             return it->second(json_path);
         }
 
-        Odometry(const Options& options) : options_(options) { map_.setDefaultLifeTime(options_.voxel_lifetime); }
+        Odometry(const Options& options) : options_(options) { 
+            map_.initialize(options_.voxel_lifetime, options_.sequential_threshold_odom, options_.num_threads_odom); }
+
         virtual ~Odometry() = default;
 
         // trajectory
