@@ -112,6 +112,9 @@ namespace stateestimate {
         std::vector<Point3D> initializeFrame(int index_frame, const std::vector<Point3D>& const_frame);
         void updateMap(int index_frame, int update_frame);
         bool icp(int index_frame, std::vector<Point3D>& keypoints, const std::vector<finalicp::IMUData>& imu_data_vec, const std::vector<PoseData>& pose_data_vec);
+        void build_voxel_map(const std::vector<Point3D>& frame, double size_voxel, 
+                                            tsl::robin_map<Voxel, Point3D, VoxelHash>& voxel_map,
+                                            int num_threads, int sequential_threshold);
 
     private:
         Options options_;

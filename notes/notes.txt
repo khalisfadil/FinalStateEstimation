@@ -35,3 +35,6 @@ Dienstag, 15. Juli 2025 11:08
     - auto &steam_icp_options = dynamic_cast<SteamLioOdometry::Options &>(odometry_options);
     - tsl::robin_map supports concurrent reads but not writes without synchronization
     - I have update map.hpp to potential a better and safer version.
+--------------------------------------------------------------------------------------------------------------------------
+Mittwoch, 16. Juli 2025 09:41
+    - add trajectory.hpp with brief comment

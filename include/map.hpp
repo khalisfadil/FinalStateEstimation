@@ -259,29 +259,52 @@ namespace stateestimate {
         return false;
     }
 
+    /**
+     * @brief Performs a K-Nearest Neighbor (KNN) search for a given point within the voxel map.
+     * @details This function efficiently finds the `max_num_neighbors` closest points by searching
+     * outward from the query point in concentric shells of voxels. It uses several
+     * pruning strategies to speed up the search significantly.
+     * @param point The 3D query point.
+     * @param nb_voxels_visited The maximum search radius in number of voxels from the center.
+     * @param size_voxel_map The side length of a single cubic voxel.
+     * @param max_num_neighbors The maximum number of neighbors to return (K in KNN).
+     * @param threshold_voxel_capacity A voxel must have at least this many points to be considered.
+     * @param voxels An optional output vector to store the Voxel from which each neighbor was found.
+     * @return An array of the closest neighboring points found, sorted from nearest to farthest.
+     */
     inline ArrayVector3d Map::searchNeighbors(const Eigen::Vector3d& point, int nb_voxels_visited, double size_voxel_map,
-                                              int max_num_neighbors, int threshold_voxel_capacity, std::vector<Voxel>* voxels) {
+                                                int max_num_neighbors, int threshold_voxel_capacity, std::vector<Voxel>* voxels) {
+        // Clear the optional output vector if it's provided.
         if (voxels) voxels->clear();
         
+        // Determine the voxel containing the query point.
         const Voxel center = Voxel::Coordinates(point, size_voxel_map);
+        // A max-priority queue to keep track of the K nearest neighbors. The top element is the farthest.
         priority_queue_t priority_queue;
+        // The squared distance to the farthest neighbor found so far.
         double max_dist_sq = std::numeric_limits<double>::infinity();
 
+        // A helper lambda to process all points within a single voxel.
         auto process_voxel = [&](const Voxel& voxel) {
             auto search = voxel_map_.find(voxel);
+            // Skip if the voxel doesn't exist or is too sparse.
             if (search == voxel_map_.end() || search->second.NumPoints() < threshold_voxel_capacity) {
                 return;
             }
             const auto& block = search->second;
 
+            // Iterate through all points in the voxel and update the KNN priority queue.
             for (const auto& neighbor : block.points) {
                 double dist_sq = (neighbor - point).squaredNorm();
+                // If the queue isn't full, just add the new point.
                 if (priority_queue.size() < static_cast<size_t>(max_num_neighbors)) {
                     priority_queue.emplace(dist_sq, neighbor, voxel);
+                    // If the queue just became full, update the max distance.
                     if (priority_queue.size() == static_cast<size_t>(max_num_neighbors)) {
                         max_dist_sq = std::get<0>(priority_queue.top());
                     }
                 } else if (dist_sq < max_dist_sq) {
+                    // If the new point is closer than the farthest one in the queue, replace it.
                     priority_queue.pop();
                     priority_queue.emplace(dist_sq, neighbor, voxel);
                     max_dist_sq = std::get<0>(priority_queue.top());
@@ -291,23 +314,25 @@ namespace stateestimate {
 
         const double half_size = size_voxel_map / 2.0;
 
-        // Traverse concentric shells (Chebyshev distance)
+        // --- Main Search Loop: Traverse concentric shells of voxels ---
         for (int d = 0; d <= nb_voxels_visited; ++d) {
-            // Early exit if the minimum distance to the current shell is already
-            // greater than the furthest neighbor we've found.
+            // --- Pruning Strategy 1: Shell-level early exit ---
+            // Calculate the minimum possible distance to the current shell of voxels.
             double shell_min_dist = (d > 0 ? (d - 1) * size_voxel_map : 0.0);
+            // If this minimum distance is greater than our farthest neighbor, we can stop searching.
             if (shell_min_dist * shell_min_dist > max_dist_sq) break;
 
+            // Iterate through the voxels forming the surface of a cube with radius 'd'.
             for (int dx = -d; dx <= d; ++dx) {
                 for (int dy = -d; dy <= d; ++dy) {
                     for (int dz = -d; dz <= d; ++dz) {
-                        // Process only the boundary of the cube at distance `d`
+                        // Process only the boundary of the cube to avoid redundant checks.
                         if (std::max({std::abs(dx), std::abs(dy), std::abs(dz)}) != d) continue;
 
                         Voxel voxel{center.x + dx, center.y + dy, center.z + dz};
 
-                        // Voxel-level pruning: check the minimum possible distance from the
-                        // query point to this voxel's bounding box.
+                        // --- Pruning Strategy 2: Voxel-level distance check ---
+                        // Calculate the minimum squared distance from the query point to this voxel's bounding box.
                         double vx_center = voxel.x * size_voxel_map + half_size;
                         double vy_center = voxel.y * size_voxel_map + half_size;
                         double vz_center = voxel.z * size_voxel_map + half_size;
@@ -317,6 +342,7 @@ namespace stateestimate {
                         double dz_min = std::max(0.0, std::abs(point.z() - vz_center) - half_size);
                         double voxel_min_dist_sq = dx_min * dx_min + dy_min * dy_min + dz_min * dz_min;
 
+                        // If the closest point in this voxel is farther than our farthest neighbor, skip the whole voxel.
                         if (voxel_min_dist_sq > max_dist_sq) continue;
 
                         process_voxel(voxel);
@@ -325,11 +351,13 @@ namespace stateestimate {
             }
         }
 
-        // Extract results from the priority queue
+        // --- Result Extraction ---
+        // Copy the results from the priority queue into an output vector.
         const auto size = priority_queue.size();
         ArrayVector3d closest_neighbors(size);
         if (voxels) voxels->resize(size);
 
+        // Popping from the max-heap gives elements from farthest to nearest, so we fill the output vector backwards.
         for (size_t i = size; i > 0; --i) {
             closest_neighbors[i - 1] = std::get<1>(priority_queue.top());
             if (voxels) (*voxels)[i - 1] = std::get<2>(priority_queue.top());
@@ -337,5 +365,4 @@ namespace stateestimate {
         }
         return closest_neighbors;
     }
-
 } // namespace stateestimate
