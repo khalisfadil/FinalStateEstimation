@@ -1334,7 +1334,6 @@ namespace  stateestimate{
         std::cout << "[ICP] prev scan end time: " << trajectory_[index_frame - 1].end_timestamp << std::endl;
 #endif
         
-
         // Step 8: Get the previous frame's end timestamp
         // prev_time is the end time of the previous frame (index_frame - 1)
         const double PREV_TIME = trajectory_[index_frame - 1].end_timestamp;

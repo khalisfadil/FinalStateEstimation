@@ -38,3 +38,6 @@ Dienstag, 15. Juli 2025 11:08
 --------------------------------------------------------------------------------------------------------------------------
 Mittwoch, 16. Juli 2025 09:41
     - add trajectory.hpp with brief comment
+    - going back to Transformation understanding
+    - Tworld,new​=Tworld,old​ * Trelative, where Trelative define from LLA2NED and RPY of the compass.
+    - LLA2NED, the NED is relative translation
