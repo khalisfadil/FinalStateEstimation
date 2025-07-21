@@ -412,13 +412,20 @@ namespace  stateestimate{
             }
             if (odometry_options.contains("rv_cov_inv")) parsed_options.rv_cov_inv = odometry_options["rv_cov_inv"].get<double>();
             if (odometry_options.contains("rv_loss_threshold")) parsed_options.rv_loss_threshold = odometry_options["rv_loss_threshold"].get<double>();
+            
             if (odometry_options.contains("verbose")) parsed_options.verbose = odometry_options["verbose"].get<bool>();
             if (odometry_options.contains("max_iterations")) parsed_options.max_iterations = odometry_options["max_iterations"].get<int>();
             if (odometry_options.contains("sequential_threshold")) parsed_options.sequential_threshold = odometry_options["sequential_threshold"].get<int>();
             if (odometry_options.contains("num_threads")) parsed_options.num_threads = odometry_options["num_threads"].get<unsigned int>();
             if (odometry_options.contains("delay_adding_points")) parsed_options.delay_adding_points = odometry_options["delay_adding_points"].get<int>();
             if (odometry_options.contains("use_final_state_value")) parsed_options.use_final_state_value = odometry_options["use_final_state_value"].get<bool>();
+            if (odometry_options.contains("break_icp_early")) parsed_options.break_icp_early = odometry_options["break_icp_early"].get<bool>();
+            if (odometry_options.contains("use_line_search")) parsed_options.use_line_search = odometry_options["use_line_search"].get<bool>();
+            
             if (odometry_options.contains("gravity")) parsed_options.gravity = odometry_options["gravity"].get<double>();
+            if (odometry_options.contains("use_imu")) parsed_options.use_imu = odometry_options["use_imu"].get<bool>();
+            if (odometry_options.contains("use_accel")) parsed_options.use_accel = odometry_options["use_accel"].get<bool>();
+
             if (odometry_options.contains("r_imu_acc") && odometry_options["r_imu_acc"].is_array() && odometry_options["r_imu_acc"].size() == 3) {
                 for (int i = 0; i < 3; ++i) {
                     parsed_options.r_imu_acc(i) = odometry_options["r_imu_acc"][i].get<double>();
@@ -448,12 +455,41 @@ namespace  stateestimate{
             if (odometry_options.contains("p0_bias_gyro")) parsed_options.p0_bias_gyro = odometry_options["p0_bias_gyro"].get<double>();
             if (odometry_options.contains("pk_bias_gyro")) parsed_options.pk_bias_gyro = odometry_options["pk_bias_gyro"].get<double>();
             if (odometry_options.contains("q_bias_gyro")) parsed_options.q_bias_gyro = odometry_options["q_bias_gyro"].get<double>();
-            if (odometry_options.contains("use_imu")) parsed_options.use_imu = odometry_options["use_imu"].get<bool>();
+            if (odometry_options.contains("acc_loss_func")) parsed_options.acc_loss_func = odometry_options["acc_loss_func"].get<std::string>();
+            if (odometry_options.contains("acc_loss_sigma")) parsed_options.acc_loss_sigma = odometry_options["acc_loss_sigma"].get<double>();
+            if (odometry_options.contains("gyro_loss_func")) parsed_options.gyro_loss_func = odometry_options["gyro_loss_func"].get<std::string>();
+            if (odometry_options.contains("gyro_loss_sigma")) parsed_options.gyro_loss_sigma = odometry_options["gyro_loss_sigma"].get<double>();
+            
             if (odometry_options.contains("T_mi_init_only")) parsed_options.T_mi_init_only = odometry_options["T_mi_init_only"].get<bool>();
             if (odometry_options.contains("use_T_mi_gt")) parsed_options.use_T_mi_gt = odometry_options["use_T_mi_gt"].get<bool>();
+            if (odometry_options.contains("xi_ig") && odometry_options["xi_ig"].is_array() && odometry_options["xi_ig"].size() == 6) {
+                for (int i = 0; i < 6; ++i) {
+                    parsed_options.xi_ig(i) = odometry_options["xi_ig"][i].get<double>();
+                }
+            }
+            if (odometry_options.contains("T_mi_init_cov") && odometry_options["T_mi_init_cov"].is_array() && odometry_options["T_mi_init_cov"].size() == 6) {
+                for (int i = 0; i < 6; ++i) {
+                    parsed_options.T_mi_init_cov(i) = odometry_options["T_mi_init_cov"][i].get<double>();
+                }
+            }
             if (odometry_options.contains("qg_diag") && odometry_options["qg_diag"].is_array() && odometry_options["qg_diag"].size() == 6) {
                 for (int i = 0; i < 6; ++i) {
                     parsed_options.qg_diag(i) = odometry_options["qg_diag"][i].get<double>();
+                }
+            }
+            if (odometry_options.contains("T_mi_prior_cov") && odometry_options["T_mi_prior_cov"].is_array() && odometry_options["T_mi_prior_cov"].size() == 6) {
+                for (int i = 0; i < 6; ++i) {
+                    parsed_options.T_mi_prior_cov(i) = odometry_options["T_mi_prior_cov"][i].get<double>();
+                }
+            }
+            if (odometry_options.contains("use_T_mi_prior_after_init")) parsed_options.use_T_mi_prior_after_init = odometry_options["use_T_mi_prior_after_init"].get<bool>();
+            if (odometry_options.contains("use_bias_prior_after_init")) parsed_options.use_bias_prior_after_init = odometry_options["use_bias_prior_after_init"].get<bool>();
+
+            if (odometry_options.contains("T_rm_init") && odometry_options["T_rm_init"].is_array() && odometry_options["T_rm_init"].size() == 16) {
+                for (int i = 0; i < 4; ++i) {
+                    for (int j = 0; j < 4; ++j) {
+                        parsed_options.T_rm_init(i, j) = odometry_options["T_rm_init"][i * 4 + j].get<double>();
+                    }
                 }
             }
             if (odometry_options.contains("p0_pose") && odometry_options["p0_pose"].is_array() && odometry_options["p0_pose"].size() == 6) {
@@ -471,31 +507,8 @@ namespace  stateestimate{
                     parsed_options.p0_accel(i) = odometry_options["p0_accel"][i].get<double>();
                 }
             }
-            if (odometry_options.contains("T_mi_init_cov") && odometry_options["T_mi_init_cov"].is_array() && odometry_options["T_mi_init_cov"].size() == 6) {
-                for (int i = 0; i < 6; ++i) {
-                    parsed_options.T_mi_init_cov(i) = odometry_options["T_mi_init_cov"][i].get<double>();
-                }
-            }
-            if (odometry_options.contains("T_mi_prior_cov") && odometry_options["T_mi_prior_cov"].is_array() && odometry_options["T_mi_prior_cov"].size() == 6) {
-                for (int i = 0; i < 6; ++i) {
-                    parsed_options.T_mi_prior_cov(i) = odometry_options["T_mi_prior_cov"][i].get<double>();
-                }
-            }
-            if (odometry_options.contains("xi_ig") && odometry_options["xi_ig"].is_array() && odometry_options["xi_ig"].size() == 6) {
-                for (int i = 0; i < 6; ++i) {
-                    parsed_options.xi_ig(i) = odometry_options["xi_ig"][i].get<double>();
-                }
-            }
-            if (odometry_options.contains("use_T_mi_prior_after_init")) parsed_options.use_T_mi_prior_after_init = odometry_options["use_T_mi_prior_after_init"].get<bool>();
-            if (odometry_options.contains("use_bias_prior_after_init")) parsed_options.use_bias_prior_after_init = odometry_options["use_bias_prior_after_init"].get<bool>();
-            if (odometry_options.contains("acc_loss_func")) parsed_options.acc_loss_func = odometry_options["acc_loss_func"].get<std::string>();
-            if (odometry_options.contains("acc_loss_sigma")) parsed_options.acc_loss_sigma = odometry_options["acc_loss_sigma"].get<double>();
-            if (odometry_options.contains("gyro_loss_func")) parsed_options.gyro_loss_func = odometry_options["gyro_loss_func"].get<std::string>();
-            if (odometry_options.contains("gyro_loss_sigma")) parsed_options.gyro_loss_sigma = odometry_options["gyro_loss_sigma"].get<double>();
             if (odometry_options.contains("filter_lifetimes")) parsed_options.filter_lifetimes = odometry_options["filter_lifetimes"].get<bool>();
-            if (odometry_options.contains("break_icp_early")) parsed_options.break_icp_early = odometry_options["break_icp_early"].get<bool>();
-            if (odometry_options.contains("use_line_search")) parsed_options.use_line_search = odometry_options["use_line_search"].get<bool>();
-            if (odometry_options.contains("use_accel")) parsed_options.use_accel = odometry_options["use_accel"].get<bool>();
+            
         } catch (const nlohmann::json::exception& e) {throw std::runtime_error("JSON parsing error in metadata: " + std::string(e.what()));}
 
         return parsed_options;
@@ -582,7 +595,15 @@ namespace  stateestimate{
     }
 
     // ########################################################################
-    // ~lidarinertialodom deconstructor
+    // setInitialPose
+    // ########################################################################
+    
+    void lidarinertialodom::setInitialPose(const Eigen::Matrix4d& initial_pose) {
+        options_.T_rm_init = initial_pose;
+    }
+
+    // ########################################################################
+    // trajectory
     // ########################################################################
 
     Trajectory lidarinertialodom::trajectory() {
@@ -1092,17 +1113,17 @@ namespace  stateestimate{
         std::vector<double> unique_point_times(unique_point_times_set.begin(), unique_point_times_set.end());
 
         // Cache interpolated poses
-        const Eigen::Matrix4d T_rs = options_.T_sr.inverse();
+        const Eigen::Matrix4d T_rs = options_.T_sr.inverse(); // this is robot to sensor which is Identity.
 
         std::map<double, Eigen::Matrix4d> T_ms_cache_map;
         if (unique_point_times.size() < static_cast<size_t>(options_.sequential_threshold)) {
             // Sequential pose interpolation
             for (const auto& ts : unique_point_times) {
-                const auto T_rm_intp_eval = update_trajectory->getPoseInterpolator(finalicp::traj::Time(ts));
+                const auto T_rm_intp_eval = update_trajectory->getPoseInterpolator(finalicp::traj::Time(ts)); // Correctly gets the Robot-in-Map pose (T_rm).
 
-                const Eigen::Matrix4d T_ms = T_rm_intp_eval->value().inverse().matrix() * T_rs;
+                const Eigen::Matrix4d T_ms = T_rm_intp_eval->value().inverse().matrix() * T_rs; // This correctly computes the final Sensor-to-Map transformation (T_ms = T_mr * T_rs).
 
-                T_ms_cache_map[ts] = T_ms;
+                T_ms_cache_map[ts] = T_ms; 
             }
         } else {
             // Parallel pose interpolation with TBB
@@ -1129,7 +1150,7 @@ namespace  stateestimate{
             for (auto& point : frame) {
                 try {
                     const auto& T_ms = T_ms_cache_map.at(point.timestamp);
-                    point.pt = T_ms.block<3, 3>(0, 0) * point.raw_pt + T_ms.block<3, 1>(0, 3);
+                    point.pt = T_ms.block<3, 3>(0, 0) * point.raw_pt + T_ms.block<3, 1>(0, 3); // Correctly applies the transformation to move a point from the sensor's frame into the global map frame.
                 } catch (const std::out_of_range&) {
                     throw std::runtime_error("Timestamp not found in cache in updateMap for frame " + std::to_string(update_frame));
                 }
@@ -1515,7 +1536,7 @@ namespace  stateestimate{
             const auto& PREV_VAR = trajectory_vars_.at(prev_trajectory_var_index);
 
             // Define initial pose (T_rm, identity), velocity (w_mr_inr, zero), and acceleration (dw_mr_inr, zero)
-            math::se3::Transformation T_rm; // Identity transformation (no initial offset)
+            math::se3::Transformation T_rm = math::se3::Transformation(options_.T_rm_init); // Identity transformation (no initial offset)
             Eigen::Matrix<double, 6, 1> w_mr_inr = Eigen::Matrix<double, 6, 1>::Zero(); // Zero initial velocity
             Eigen::Matrix<double, 6, 1> dw_mr_inr = Eigen::Matrix<double, 6, 1>::Zero(); // Zero initial acceleration
 

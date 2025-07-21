@@ -45,5 +45,20 @@ Mittwoch, 16. Juli 2025 09:41
 --------------------------------------------------------------------------------------------------------------------------
 Montag, 21. Juli 2025 10:04
     - I have double check the map.hpp until today there is not bug that I can found. expected map.hpp to works okay.
-    - 
+    - "Hey, if anyone ever asks for the string "SLAM_LIDAR_INERTIAL_ODOM", you should use the constructor for the lidarinertialodom class to create the object they want."
+    - Phase 1: The Setup (Automatic Program Startup)
+        - This phase prepares the system.
+        - Registration: Inside the lidarinertialodom.hpp file, the SLAM_REGISTER_ODOMETRY macro creates a special static helper object.
+        - Auto-Run: Because this object is static, its constructor (OdometryRegister()) runs automatically when the program launches.
+        - Populate the "Menu": This constructor adds an entry to a central, hidden static map inside the Odometry class. The entry consists of:
+        - The Key: The string "SLAM_LIDAR_INERTIAL_ODOM".
+        - The Value: A "recipe" (a C++ lambda) for how to create a lidarinertialodom object.
+    - At the end of this phase, the system knows that "SLAM_LIDAR_INERTIAL_ODOM" exists, but no lidarinertialodom object has actually been created yet.
+    - Phase 2: The Action (When Get is Called)
+        - This phase happens when your SLAMPipeline code runs.
+        - The Request: Your code calls Odometry::Get("SLAM_LIDAR_INERTIAL_ODOM", json_path).
+        - Lookup: The Get function looks up the string "SLAM_LIDAR_INERTIAL_ODOM" in the central map and finds the "recipe" that was registered in Phase 1.
+        - Execution: The Get function executes the recipe, handing it the json_path string.
+        - Creation: The recipe's only instruction is to call std::make_shared<lidarinertialodom>(json_path). This is the moment the lidarinertialodom object is finally constructed. Its constructor uses the json_path to load all its settings from the file.
+        - Return: A pointer to the new, fully-configured lidarinertialodom object is returned to the SLAMPipeline.
 --------------------------------------------------------------------------------------------------------------------------

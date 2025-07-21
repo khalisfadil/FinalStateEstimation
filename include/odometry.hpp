@@ -134,4 +134,4 @@ namespace stateestimate {
 
 } // namespace stateestimate
 
-#include <odometry/lidarinertialodometry.hpp>
+#include <odometry/lidarinertialodometry.hpp> // without this, the chef never shows up to work
