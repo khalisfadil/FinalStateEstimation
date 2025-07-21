@@ -92,6 +92,10 @@ namespace stateestimate {
         // Registers a new Frame to the Map with an initial estimate
         virtual RegistrationSummary registerFrame(const DataFrame& frame) = 0;
 
+        // It's virtual, but not pure virtual (= 0), so derived classes are not
+        // required to implement it. The empty {} means it does nothing by default.
+        virtual void setInitialPose(const Eigen::Matrix4d& initial_pose) {}
+
     protected:
         Trajectory trajectory_; // std::vector<TrajectoryFrame>; in trajectory.hpp
         Map map_;

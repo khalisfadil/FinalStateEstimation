@@ -188,7 +188,7 @@ namespace stateestimate {
             Trajectory trajectory() override;
             RegistrationSummary registerFrame(const DataFrame& frame) override;
 
-            void setInitialPose(const Eigen::Matrix4d& initial_pose);
+            void setInitialPose(const Eigen::Matrix4d& initial_pose) override;
 
         private:
             inline double AngularDistance(const Eigen::Matrix3d& rota, const Eigen::Matrix3d& rotb);
