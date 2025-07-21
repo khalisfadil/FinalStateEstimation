@@ -41,3 +41,9 @@ Mittwoch, 16. Juli 2025 09:41
     - going back to Transformation understanding
     - Tworld,new​=Tworld,old​ * Trelative, where Trelative define from LLA2NED and RPY of the compass.
     - LLA2NED, the NED is relative translation
+    - I have been adviced to remove the global control on each of my tbb function especially in finalstateestimation. will do tomorrow.
+--------------------------------------------------------------------------------------------------------------------------
+Montag, 21. Juli 2025 10:04
+    - I have double check the map.hpp until today there is not bug that I can found. expected map.hpp to works okay.
+    - 
+--------------------------------------------------------------------------------------------------------------------------

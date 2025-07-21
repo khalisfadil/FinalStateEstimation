@@ -167,7 +167,7 @@ namespace stateestimate {
         // Parallel "Map" phase: Group points by target voxel
         using TempMap = tbb::concurrent_hash_map<Voxel, std::vector<Eigen::Vector3d>, VoxelTBBHashCompare>;
         TempMap temp_voxel_map;
-        tbb::global_control gc(tbb::global_control::max_allowed_parallelism, default_num_threads_);
+        // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, default_num_threads_);
         
         tbb::parallel_for(tbb::blocked_range<size_t>(0, points.size()), [&](const tbb::blocked_range<size_t>& r) {
             for (size_t i = r.begin(); i != r.end(); ++i) {

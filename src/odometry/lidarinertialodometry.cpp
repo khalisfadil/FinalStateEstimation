@@ -20,7 +20,7 @@ namespace  stateestimate{
     // sub_sample_frame
     // ########################################################################
 
-    void lidarinertialodom::sub_sample_frame(std::vector<Point3D>& frame, double size_voxel, int num_threads, int sequential_threshold) {
+    void lidarinertialodom::sub_sample_frame(std::vector<Point3D>& frame, double size_voxel, int sequential_threshold) {
         if (frame.empty()) return;
 
         using VoxelMap = tsl::robin_map<Voxel, Point3D, VoxelHash>;
@@ -36,7 +36,7 @@ namespace  stateestimate{
             }
         } else {
             // Use the efficient parallel builder for large frames
-            build_voxel_map(frame, size_voxel, voxel_map, num_threads, sequential_threshold);
+            build_voxel_map(frame, size_voxel, voxel_map, sequential_threshold);
         }
 
         // Step 2: Rebuild the frame with the downsampled points
@@ -54,15 +54,14 @@ namespace  stateestimate{
 
     // Private helper to build the map efficiently in parallel
     void lidarinertialodom::build_voxel_map(const std::vector<Point3D>& frame, double size_voxel, 
-                                            tsl::robin_map<Voxel, Point3D, VoxelHash>& voxel_map,
-                                            int num_threads, int sequential_threshold) {
+                                            tsl::robin_map<Voxel, Point3D, VoxelHash>& voxel_map, int sequential_threshold) {
         
         // Define a concurrent map for parallel insertion
         using ConcurrentVoxelMap = tbb::concurrent_hash_map<Voxel, Point3D, VoxelHash>;
         ConcurrentVoxelMap concurrent_map;
 
         // Use TBB to build the concurrent map in one parallel pass
-        tbb::global_control gc(tbb::global_control::max_allowed_parallelism, num_threads);
+        // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, num_threads);
         tbb::parallel_for(tbb::blocked_range<size_t>(0, frame.size(), sequential_threshold), 
             [&](const tbb::blocked_range<size_t>& range) {
                 for (size_t i = range.begin(); i != range.end(); ++i) {
@@ -89,8 +88,7 @@ namespace  stateestimate{
     // neighborhood-based filter like Radius Outlier Removal
     // Statistical Outlier Removal (SOR) > maybe can try
     // non-Clustering removal > maybe can try
-    void lidarinertialodom::sub_sample_frame_outlier_removal(std::vector<Point3D>& frame, double size_voxel, 
-                                                            int num_threads, int sequential_threshold) {
+    void lidarinertialodom::sub_sample_frame_outlier_removal(std::vector<Point3D>& frame, double size_voxel, int sequential_threshold) {
 
         if (frame.empty()) return;
 
@@ -107,7 +105,7 @@ namespace  stateestimate{
             }
         } else {
             // Use the efficient parallel builder for large frames
-            build_voxel_map(frame, size_voxel, voxel_map, num_threads, sequential_threshold);
+            build_voxel_map(frame, size_voxel, voxel_map, sequential_threshold);
         }
 
         // Step 2: Set up ROR filter parameters
@@ -125,7 +123,7 @@ namespace  stateestimate{
         }
         
         std::vector<bool> keep(keys.size(), false);
-        tbb::global_control gc(tbb::global_control::max_allowed_parallelism, num_threads);
+        // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, num_threads);
 
         tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size(), sequential_threshold), [&](const tbb::blocked_range<size_t>& range) {
                 for (size_t i = range.begin(); i != range.end(); ++i) {
@@ -173,7 +171,7 @@ namespace  stateestimate{
     // ########################################################################
 
     void lidarinertialodom::grid_sampling(const std::vector<Point3D>& frame, std::vector<Point3D>& keypoints, 
-                                     double size_voxel_subsampling, int num_threads, int sequential_threshold) {
+                                     double size_voxel_subsampling, int sequential_threshold) {
 
         // Step 1: Clear the output keypoints vector to ensure it starts empty
         // This prevents appending new points to any existing data
@@ -196,7 +194,7 @@ namespace  stateestimate{
         // Step 5: Apply voxel grid subsampling to frame_sub
         // Calls sub_sample_frame_outlier_removal to reduce the number of points by keeping one point per voxel
         // Modifies frame_sub in-place, using the provided voxel size, thread count, and threshold
-        sub_sample_frame_outlier_removal(frame_sub, size_voxel_subsampling, num_threads, sequential_threshold);
+        sub_sample_frame_outlier_removal(frame_sub, size_voxel_subsampling, sequential_threshold);
 
         // Step 6: Reserve space in keypoints to avoid reallocations
         // Uses the size of the downsampled frame_sub to estimate the required capacity
@@ -221,7 +219,7 @@ namespace  stateestimate{
     // and Neighborhood is a struct with: Eigen::Vector3d center, normal; Eigen::Matrix3d covariance; double a2D;
 
     lidarinertialodom::Neighborhood lidarinertialodom::compute_neighborhood_distribution(
-        const ArrayVector3d& points, int num_threads, int sequential_threshold) {
+        const ArrayVector3d& points, int sequential_threshold) {
         
         Neighborhood neighborhood; // Default: center/normal=zero, covariance=identity, a2D=1.0
         const size_t point_count = points.size();
@@ -240,7 +238,7 @@ namespace  stateestimate{
         }
 
         // Limit the number of threads for the parallel section
-        tbb::global_control gc(tbb::global_control::max_allowed_parallelism, num_threads);
+        // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, num_threads);
 
         // --- Use a single-pass algorithm to compute sums for mean and covariance ---
         // This is more efficient than a two-pass approach.
@@ -652,6 +650,7 @@ namespace  stateestimate{
     Debug timers track performance if enabled, ensuring robust and efficient frame registration.*/
 
     auto lidarinertialodom::registerFrame(const DataFrame &const_frame) -> RegistrationSummary {
+        
         RegistrationSummary summary;
 
 #ifdef DEBUG
@@ -668,7 +667,7 @@ namespace  stateestimate{
 
         // Step 2: Add new frame to trajectory
         // Create a new entry in the trajectory vector for the current frame
-        int index_frame = trajectory_.size();
+        int index_frame = trajectory_.size(); // start from 0,1,2,3,4
         trajectory_.emplace_back();
 
         // Step 3: Initialize frame metadata
@@ -701,7 +700,7 @@ namespace  stateestimate{
 #ifdef DEBUG
             if (!timer.empty()) timer[1].second->start();
 #endif
-            grid_sampling(frame, keypoints, sample_voxel_size, options_.num_threads, options_.sequential_threshold);   //####!!! 4 has outlier removal
+            grid_sampling(frame, keypoints, sample_voxel_size, options_.sequential_threshold);   //####!!! 4 has outlier removal
 
 #ifdef DEBUG
             if (!timer.empty()) timer[1].second->stop();
@@ -722,7 +721,7 @@ namespace  stateestimate{
 #endif
             summary.keypoints = keypoints;
             if (!summary.success) {return summary;}
-        } else {
+        } else { // !!!!!!!!!!! this is responsible for initial frame
             // Step 5c: Initialize first frame
             // Set up initial state and transformations for the trajectory start
             using namespace finalicp;
@@ -746,7 +745,7 @@ namespace  stateestimate{
             const double begin_time = trajectory_[index_frame].begin_timestamp;
             Time begin_slam_time(begin_time);
             auto begin_T_rm_var = SE3StateVar::MakeShared(T_rm);
-            auto begin_w_mr_inr_var = VSpaceStateVar<6>::MakeShared(w_mr_inr);
+            auto begin_w_mr_inr_var = VSpaceStateVar<6>::MakeShared(w_mr_inr);           //begin velocity of the robot.
             auto begin_dw_mr_inr_var = VSpaceStateVar<6>::MakeShared(dw_mr_inr);
             auto begin_imu_biases = VSpaceStateVar<6>::MakeShared(b_zero);
             auto begin_T_mi_var = SE3StateVar::MakeShared(T_mi);
@@ -833,7 +832,7 @@ namespace  stateestimate{
                 // Step 8b: Parallel point correction
                 // Use TBB for parallel processing of large point clouds
                 tbb::concurrent_vector<Point3D> concurrent_points(const_frame.pointcloud.begin(), const_frame.pointcloud.end());
-                tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
+                // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, concurrent_points.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                         auto q_begin = Eigen::Quaterniond(traj.begin_R);
                         auto q_end = Eigen::Quaterniond(traj.end_R);
@@ -897,7 +896,7 @@ namespace  stateestimate{
             }
         } else {
             // Parallel processing with TBB
-            tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
+            // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
             auto result = tbb::parallel_reduce(
                 tbb::blocked_range<size_t>(0, const_frame.pointcloud.size(), options_.sequential_threshold),
                 std::pair<double, double>{std::numeric_limits<double>::max(), std::numeric_limits<double>::min()},
@@ -939,7 +938,7 @@ namespace  stateestimate{
     void lidarinertialodom::initializeMotion(int index_frame) {
 
         // Cache T_sr inverse
-        const Eigen::Matrix4d T_rs = options_.T_sr.inverse();
+        const Eigen::Matrix4d T_rs = options_.T_sr.inverse();// initial pose?
 
         if (index_frame <= 1) {
             // Initialize first two frames with T_rs
@@ -988,7 +987,7 @@ namespace  stateestimate{
         const double sample_size = index_frame < options_.init_num_frames ? options_.init_voxel_size : options_.voxel_size;
 
         // Subsample
-        sub_sample_frame(frame, sample_size, options_.num_threads, options_.sequential_threshold);
+        sub_sample_frame(frame, sample_size, options_.sequential_threshold);
 
         // Shuffle points to avoid bias
         std::mt19937_64 g(42); // Fixed seed for reproducibility
@@ -1012,7 +1011,7 @@ namespace  stateestimate{
             }
         } else {
             // Parallel processing with TBB
-            tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
+            // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
             tbb::parallel_for(tbb::blocked_range<size_t>(0, frame.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                     for (size_t i = range.begin(); i != range.end(); ++i) {
                         auto& point = frame[i];
@@ -1107,7 +1106,7 @@ namespace  stateestimate{
             }
         } else {
             // Parallel pose interpolation with TBB
-            tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
+            // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
             tbb::concurrent_vector<Eigen::Matrix4d> T_ms_cache(unique_point_times.size());
             tbb::parallel_for(tbb::blocked_range<size_t>(0, unique_point_times.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                     for (size_t jj = range.begin(); jj != range.end(); ++jj) {
@@ -1137,7 +1136,7 @@ namespace  stateestimate{
             }
         } else {
             // Parallel point transformation with TBB
-            tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
+            // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
             tbb::parallel_for(tbb::blocked_range<size_t>(0, frame.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                     for (size_t i = range.begin(); i != range.end(); ++i) {
                         auto& point = frame[i];
@@ -1214,7 +1213,7 @@ namespace  stateestimate{
         } else {
             // Parallel cost term creation with tbb::concurrent_vector
             tbb::concurrent_vector<finalicp::BaseCostTerm::ConstPtr> concurrent_cost_terms(imu_data_vec.size());
-            tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
+            // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
             tbb::parallel_for(tbb::blocked_range<size_t>(0, imu_data_vec.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                     for (size_t i = range.begin(); i != range.end(); ++i) {
                         const auto& imu_data = imu_data_vec[i];
@@ -1775,10 +1774,10 @@ namespace  stateestimate{
         // IMU cost terms constrain the trajectory using accelerometer and gyroscope measurements
         if (options_.use_imu) {
 
-            #if false
+#if false
                 imu_super_cost_term->set(imu_data_vec);
                 imu_super_cost_term->init();
-            #else
+#else
 
                 // Create individual IMU cost terms for each measurement
                 imu_cost_terms.reserve(imu_data_vec.size()); // Reserve 
@@ -1847,7 +1846,7 @@ namespace  stateestimate{
                     const auto gyro_cost = finalicp::WeightedLeastSqCostTerm<3>::MakeShared(gyro_error_func, gyro_noise_model, gyro_loss_func);
                     imu_cost_terms.emplace_back(gyro_cost);
                 }
-            #endif
+#endif
 
             // Step 34: Add prior cost terms for IMU biases
             // Constrain changes in IMU biases between consecutive states
@@ -1944,7 +1943,7 @@ namespace  stateestimate{
         } else {
             // Parallel: Process timestamps concurrently with TBB
             tbb::concurrent_hash_map<double, std::pair<Matrix18d, Matrix18d>> temp_interp_mats;
-            tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
+            // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
             tbb::parallel_for(tbb::blocked_range<size_t>(0, unique_point_times.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                     for (size_t i = range.begin(); i != range.end(); ++i) {
                         const double time = unique_point_times[i];
@@ -2015,7 +2014,7 @@ namespace  stateestimate{
             } else {
                 // Parallel: Process timestamps concurrently with TBB
                 tbb::concurrent_hash_map<double, Eigen::Matrix4d> temp_cache_map;
-                tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
+                // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, unique_point_times.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                         for (size_t jj = range.begin(); jj != range.end(); ++jj) {
                             const double ts = unique_point_times[jj];
@@ -2057,7 +2056,7 @@ namespace  stateestimate{
                 for (size_t jj = 0; jj < keypoints.size(); ++jj) {
                     temp_keypoints[jj] = keypoints[jj];
                 }
-                tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
+                // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, keypoints.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                         for (size_t jj = range.begin(); jj != range.end(); ++jj) {
                             auto& keypoint = temp_keypoints[jj];
@@ -2127,7 +2126,7 @@ namespace  stateestimate{
                 for (size_t i = 0; i < keypoints.size(); ++i) {
                     temp_keypoints[i] = keypoints[i];
                 }
-                tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
+                // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, keypoints.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                         for (size_t i = range.begin(); i != range.end(); ++i) {
                             auto& keypoint = temp_keypoints[i];
@@ -2238,7 +2237,7 @@ namespace  stateestimate{
                         continue;
                     }
 
-                    auto neighborhood = compute_neighborhood_distribution(vector_neighbors, options_.num_threads, options_.sequential_threshold);
+                    auto neighborhood = compute_neighborhood_distribution(vector_neighbors, options_.sequential_threshold);
                     const double planarity_weight = std::pow(neighborhood.a2D, options_.power_planarity);
                     const double weight = planarity_weight;
                     const double dist_to_plane = std::abs((keypoint.pt - vector_neighbors[0]).transpose() * neighborhood.normal);
@@ -2271,7 +2270,7 @@ namespace  stateestimate{
                 }
             } else {
                 // --- PARALLEL PATH --- using the most scalable TBB pattern
-                tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
+                // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
 
                 // Structure to hold thread-local results
                 struct ReductionResult {
@@ -2305,7 +2304,7 @@ namespace  stateestimate{
                                 continue;
                             }
 
-                            auto neighborhood = compute_neighborhood_distribution(vector_neighbors, options_.num_threads, options_.sequential_threshold);
+                            auto neighborhood = compute_neighborhood_distribution(vector_neighbors, options_.sequential_threshold);
                             const double planarity_weight = std::pow(neighborhood.a2D, options_.power_planarity);
                             const double weight = planarity_weight;
                             const double dist_to_plane = std::abs((keypoint.pt - vector_neighbors[0]).transpose() * neighborhood.normal);
