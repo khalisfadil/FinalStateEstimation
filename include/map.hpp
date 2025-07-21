@@ -157,7 +157,7 @@ namespace stateestimate {
         if (points.empty()) return;
 
         // Use sequential method for small batches to avoid parallel overhead
-        if (points.size() < default_sequential_threshold_) {
+        if (points.size() < static_cast<size_t>(default_sequential_threshold_)) {
             for (const auto& point_item : points) {
                 add(point_item.pt, voxel_size, max_num_points_in_voxel, min_distance_points, min_num_points);
             }

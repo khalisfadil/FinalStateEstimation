@@ -42,21 +42,26 @@ namespace stateestimate {
      * It packs the coordinates and applies mixing functions to ensure a good distribution.
      */
     struct VoxelHash {
+
+        static size_t hash(const Voxel& voxel) {
+            size_t seed = 0;
+            // This hash-combining pattern is inspired by the Boost library and is very effective.
+            seed ^= std::hash<int32_t>()(voxel.x) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            seed ^= std::hash<int32_t>()(voxel.y) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            seed ^= std::hash<int32_t>()(voxel.z) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            return seed;
+        }
+
+
+        // 2. The required 'equal' method for TBB (which you added correctly).
+        static bool equal(const Voxel& v1, const Voxel& v2) {
+            return v1 == v2;
+        }
+
+        // 3. The 'operator()' for compatibility with other hash maps.
+        //    It now calls the static hash function to avoid duplicating code.
         size_t operator()(const Voxel& voxel) const {
-            // Pack 16-bit representations of x, y, and z into a 64-bit integer.
-            // This assumes coordinates will fit within a 16-bit range for non-overlapping packing.
-            uint64_t packed = (static_cast<uint64_t>(static_cast<int16_t>(voxel.x))) |
-                            (static_cast<uint64_t>(static_cast<int16_t>(voxel.y)) << 16) |
-                            (static_cast<uint64_t>(static_cast<int16_t>(voxel.z)) << 32);
-            
-            // Apply a series of mixing operations to distribute the hash value well.
-            // These constants are commonly used in high-quality hash functions.
-            packed ^= packed >> 33;
-            packed *= 0xFF51AFD7ED558CCDULL; // Fibonacci hashing multiplier
-            packed ^= packed >> 33;
-            packed *= 0xC4CEB9FE1A85EC53ULL; // Another multiplier
-            packed ^= packed >> 33;
-            return static_cast<size_t>(packed);
+            return hash(voxel);
         }
     };
 
