@@ -198,9 +198,11 @@ namespace  stateestimate{
         // Step 4: Rebuild the frame sequentially from the filtered keys
         frame.clear();
         frame.reserve(keys.size());
+        size_t points_kept = 0;
         for (size_t i = 0; i < keys.size(); ++i) {
             if (keep[i]) {
                 frame.push_back(voxel_map.at(keys[i]));
+                points_kept++;
             }
         }
         frame.shrink_to_fit();
@@ -1262,7 +1264,8 @@ namespace  stateestimate{
 
         // Add trajectory states
         size_t num_states = 0;
-        for (size_t i = std::max(static_cast<int>(to_marginalize_) - 1, 0); i < trajectory_vars_.size(); i++) {
+        size_t start_idx = std::max(static_cast<int>(to_marginalize_) - 1, 0);
+        for (size_t i = start_idx; i < trajectory_vars_.size(); i++) {
             const auto& var = trajectory_vars_.at(i);
             update_trajectory->add(var.time, var.T_rm, var.w_mr_inr, var.dw_mr_inr);
             num_states++;
