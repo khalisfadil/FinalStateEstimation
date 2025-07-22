@@ -23,21 +23,46 @@ namespace  stateestimate{
     void lidarinertialodom::sub_sample_frame(std::vector<Point3D>& frame, double size_voxel, int sequential_threshold) {
         if (frame.empty()) return;
 
+#ifdef DEBUG
+        // [DEBUG] Log entry into the function and initial state
+        const size_t initial_size = frame.size();
+        std::cout << "[SUB_SAMPLE] Starting sub_sample_frame. Initial points: " << initial_size 
+              << ", Voxel Size: " << size_voxel << std::endl;
+#endif
+
         using VoxelMap = tsl::robin_map<Voxel, Point3D, VoxelHash>;
 
         // Step 1: Build the downsampled voxel map
         VoxelMap voxel_map;
         if (frame.size() < static_cast<size_t>(sequential_threshold)) {
+#ifdef DEBUG
+        std::cout << "[SUB_SAMPLE] Using sequential path (size < " << sequential_threshold << ")." << std::endl;
+#endif
             // Use a simple sequential path for small frames
             voxel_map.reserve(frame.size() / 2);
             for (const auto& point : frame) {
+                // [DEBUG] Add a check for non-finite points which can corrupt voxel calculation
+                if (!point.pt.allFinite()) {
+#ifdef DEBUG
+                    std::cout << "[SUB_SAMPLE] WARNING: Skipping non-finite point during sequential voxelization." << std::endl;
+#endif
+                    continue;
+                }
+
                 Voxel voxel = Voxel::Coordinates(point.pt, size_voxel);
                 voxel_map.try_emplace(voxel, point);
             }
         } else {
+#ifdef DEBUG
+            std::cout << "[SUB_SAMPLE] Using parallel path (build_voxel_map)." << std::endl;
+#endif
             // Use the efficient parallel builder for large frames
             build_voxel_map(frame, size_voxel, voxel_map, sequential_threshold);
         }
+
+#ifdef DEBUG
+        std::cout << "[SUB_SAMPLE] Voxel map created with " << voxel_map.size() << " unique voxels." << std::endl;
+#endif
 
         // Step 2: Rebuild the frame with the downsampled points
         frame.clear();
@@ -92,6 +117,11 @@ namespace  stateestimate{
 
         if (frame.empty()) return;
 
+#ifdef DEBUG
+        const size_t initial_size = frame.size();
+        std::cout << "[OUTLIER_REMOVAL] Starting. Initial points: " << initial_size << ", Voxel Size: " << size_voxel << std::endl;
+#endif
+
         using VoxelMap = tsl::robin_map<Voxel, Point3D, VoxelHash>;
 
         // Step 1: Build the downsampled voxel map using the optimized parallel helper
@@ -108,11 +138,21 @@ namespace  stateestimate{
             build_voxel_map(frame, size_voxel, voxel_map, sequential_threshold);
         }
 
+#ifdef DEBUG
+        const size_t downsampled_size = voxel_map.size();
+        std::cout << "[OUTLIER_REMOVAL] After downsampling, points: " << downsampled_size << std::endl;
+#endif
+
+
         // Step 2: Set up ROR filter parameters
         const double ror_radius_sq = size_voxel * size_voxel * 3.0; // Use squared distance
         const int ror_min_pts = 3;
         const int k = static_cast<int>(std::ceil(std::sqrt(ror_radius_sq) / size_voxel)) + 1;
         const bool approximate = true;
+
+#ifdef DEBUG
+        std::cout << "[OUTLIER_REMOVAL] ROR params: min_pts=" << ror_min_pts << ", neighbor_search_k=" << k << std::endl;
+#endif
 
         // Step 3: Parallel filter. We can iterate directly over the keys of the map.
         // This avoids creating a huge intermediate std::vector of pairs.
@@ -164,6 +204,13 @@ namespace  stateestimate{
             }
         }
         frame.shrink_to_fit();
+
+#ifdef DEBUG
+        std::cout << "[OUTLIER_REMOVAL] After ROR filter, points kept: " << points_kept 
+                << " (Removed " << downsampled_size - points_kept << " outliers)." << std::endl;
+        std::cout << "[OUTLIER_REMOVAL] Finished. Final points: " << frame.size() 
+                << " (Total reduction: " << initial_size - frame.size() << ")." << std::endl;
+#endif
     }
 
     // ########################################################################
@@ -172,6 +219,10 @@ namespace  stateestimate{
 
     void lidarinertialodom::grid_sampling(const std::vector<Point3D>& frame, std::vector<Point3D>& keypoints, 
                                      double size_voxel_subsampling, int sequential_threshold) {
+
+#ifdef DEBUG
+        std::cout << "[GRID_SAMPLING] Starting grid_sampling. Input points: " << frame.size() << std::endl;
+#endif
 
         // Step 1: Clear the output keypoints vector to ensure it starts empty
         // This prevents appending new points to any existing data
@@ -209,6 +260,10 @@ namespace  stateestimate{
         // Step 8: Optimize memory usage of keypoints
         // shrink_to_fit reduces the capacity to match the actual size of keypoints
         keypoints.shrink_to_fit();
+
+#ifdef DEBUG
+        std::cout << "[GRID_SAMPLING] Finished. Output keypoints: " << keypoints.size() << std::endl;
+#endif
     }
 
     // ########################################################################
@@ -224,8 +279,17 @@ namespace  stateestimate{
         Neighborhood neighborhood; // Default: center/normal=zero, covariance=identity, a2D=1.0
         const size_t point_count = points.size();
 
+#ifdef DEBUG
+        // [DEBUG] Log function entry and number of input points
+        std::cout << "[COMP_NEIGH] Processing neighborhood with " << point_count << " points." << std::endl;
+#endif
+
         // --- Handle Edge Cases ---
         if (point_count < 2) {
+#ifdef DEBUG
+            // [DEBUG] Log when an edge case is triggered
+            std::cout << "[COMP_NEIGH] Edge case: point_count < 2. Returning default values." << std::endl;
+#endif
             if (point_count == 1) {
                 neighborhood.center = points[0];
             }
@@ -291,10 +355,30 @@ namespace  stateestimate{
         // Covariance = E[x*x^T] - E[x]*E[x]^T
         neighborhood.covariance = (sum_of_outer_products * inv_point_count) - (neighborhood.center * neighborhood.center.transpose());
 
+#ifdef DEBUG
+        // [DEBUG] Check the computed covariance matrix for issues
+        if (!neighborhood.covariance.allFinite()) {
+            std::cout << "[COMP_NEIGH] CRITICAL: Covariance matrix is NOT finite!" << std::endl;
+        }
+        std::cout << "[COMP_NEIGH] Covariance Matrix:\n" << neighborhood.covariance << std::endl;
+#endif
+
         // --- Perform PCA via Eigen Decomposition to find the normal vector and planarity ---
         // The eigenvectors of the covariance matrix are the principal components (axes of variance).
         // The eigenvalues represent the magnitude of variance along those axes.
         Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es(neighborhood.covariance);
+
+        // [DEBUG] Check if the Eigen solver was successful
+        if (es.info() != Eigen::Success) {
+#ifdef DEBUG
+            std::cout << "[COMP_NEIGH] CRITICAL: Eigen decomposition failed!" << std::endl;
+#endif
+            // Handle failure: return a default neighborhood to avoid crashing
+            neighborhood.covariance.setZero();
+            neighborhood.normal = Eigen::Vector3d::UnitZ();
+            neighborhood.a2D = 0.0;
+            return neighborhood;
+        }
 
         // The normal of a plane is the direction of least variance, which corresponds
         // to the eigenvector with the smallest eigenvalue. Eigen sorts them in increasing order.
@@ -303,18 +387,43 @@ namespace  stateestimate{
         // --- Calculate planarity coefficient (a2D) ---
         // This metric describes how "flat" the point distribution is.
         const auto& eigenvalues = es.eigenvalues();
+
+#ifdef DEBUG
+        // [DEBUG] Print eigenvalues to check for negative or NaN values
+        std::cout << "[COMP_NEIGH] Eigenvalues (lambda_0, lambda_1, lambda_2): " 
+                << eigenvalues.transpose() << std::endl;
+        if (!eigenvalues.allFinite()) {
+            std::cout << "[COMP_NEIGH] CRITICAL: Eigenvalues are NOT finite!" << std::endl;
+        }
+#endif
+
         // Use std::max to prevent sqrt of small negative numbers from floating point error
         double sigma1 = std::sqrt(std::max(0.0, eigenvalues[2])); // Std dev along largest principal axis
         double sigma2 = std::sqrt(std::max(0.0, eigenvalues[1])); // Std dev along middle principal axis
         double sigma3 = std::sqrt(std::max(0.0, eigenvalues[0])); // Std dev along smallest principal axis (normal direction)
+
+#ifdef DEBUG
+        // [DEBUG] Print intermediate sigma values
+        std::cout << "[COMP_NEIGH] Sigmas (s3, s2, s1): " << sigma3 << ", " << sigma2 << ", " << sigma1 << std::endl;
+#endif
 
         // Planarity: 1 for a perfect plane (sigma3=0), 0 for a line (sigma2=sigma3=0) or sphere (sigma1=sigma2=sigma3)
         constexpr double epsilon = 1e-9;
         if (sigma1 > epsilon) {
             neighborhood.a2D = (sigma2 - sigma3) / sigma1;
         } else {
+#ifdef DEBUG
+            // [DEBUG] Log when the largest std dev is close to zero
+            std::cout << "[COMP_NEIGH] Warning: Largest eigenvalue (sigma1) is near zero. Setting a2D to 0." << std::endl;
+#endif
             neighborhood.a2D = 0.0;
         }
+
+#ifdef DEBUG
+        // [DEBUG] Print final computed values before the check and return
+        std::cout << "[COMP_NEIGH] Final Normal: " << neighborhood.normal.transpose() << std::endl;
+        std::cout << "[COMP_NEIGH] Final a2D (Planarity): " << neighborhood.a2D << std::endl;
+#endif
         
         if (!std::isfinite(neighborhood.a2D)) {
             // This case is rare but indicates a numerical issue.
@@ -551,7 +660,7 @@ namespace  stateestimate{
             return; // Avoid further operations if file cannot be opened
         }
 #ifdef DEBUG
-            std::cout << "Building full trajectory." << std::endl;
+            std::cout << "[DECONSTRUCT] Building full trajectory." << std::endl;
 #endif
 
         // Build full trajectory
@@ -560,7 +669,7 @@ namespace  stateestimate{
             full_trajectory->add(var.time, var.T_rm, var.w_mr_inr, var.dw_mr_inr);
         }
 #ifdef DEBUG
-            std::cout << "Dumping trajectory." << std::endl;
+            std::cout << "[DECONSTRUCT] Dumping trajectory." << std::endl;
 #endif
 
         // Buffer output in stringstream
@@ -590,7 +699,7 @@ namespace  stateestimate{
         trajectory_file.close();
 
 #ifdef DEBUG
-        std::cout << "Dumping trajectory. - DONE" << std::endl;
+        std::cout << "[DECONSTRUCT] Dumping trajectory. - DONE" << std::endl;
 #endif
     }
 
@@ -1118,6 +1227,12 @@ namespace  stateestimate{
     ensuring an efficient and accurate map update for odometry.*/
 
     void lidarinertialodom::updateMap(int index_frame, int update_frame) {
+    
+#ifdef DEBUG
+        // [DEBUG] Announce the start of the function and its parameters
+        std::cout << "\n--- [MAP DEBUG] Starting updateMap ---" << std::endl;
+        std::cout << "[MAP DEBUG] Current frame index: " << index_frame << ", Updating with data from frame: " << update_frame << std::endl;
+#endif
 
         // Map parameters
         const double kSizeVoxelMap = options_.size_voxel_map;
@@ -1127,8 +1242,15 @@ namespace  stateestimate{
         // Update frame
         auto& frame = trajectory_[update_frame].points;
         if (frame.empty()) {
+#ifdef DEBUG
+            std::cout << "[MAP DEBUG] Frame " << update_frame << " is empty. Nothing to add to map. Returning." << std::endl;
+#endif
             return; // No points to add
         }
+
+#ifdef DEBUG
+        std::cout << "[MAP DEBUG] Frame " << update_frame << " contains " << frame.size() << " points to process." << std::endl;
+#endif
 
         // Motion correction with SLAM interpolation
         auto update_trajectory = finalicp::traj::singer::Interface::MakeShared(options_.qc_diag, options_.ad_diag);
@@ -1151,8 +1273,11 @@ namespace  stateestimate{
         }
 
 #ifdef DEBUG
-        std::cout << "Adding points to map between (inclusive): " << begin_slam_time.seconds() << " - "
-             << end_slam_time.seconds() << ", with num states: " << num_states << std::endl;
+        std::cout << "[MAP DEBUG] Building interpolation trajectory from state index " << start_idx 
+                << " to " << (start_idx + num_states - 1) << " (" << num_states << " states)." << std::endl;
+        std::cout << "[MAP DEBUG] Trajectory covers time range (inclusive): " << std::fixed << std::setprecision(12) 
+                << begin_slam_time.seconds() << " - " << end_slam_time.seconds() 
+                << ", with num states: " << num_states << std::endl;
 #endif
 
         // Collect unique timestamps
@@ -1161,6 +1286,10 @@ namespace  stateestimate{
             unique_point_times_set.insert(point.timestamp);
         }
         std::vector<double> unique_point_times(unique_point_times_set.begin(), unique_point_times_set.end());
+
+#ifdef DEBUG
+        std::cout << "[MAP DEBUG] Found " << unique_point_times.size() << " unique timestamps in the point cloud." << std::endl;
+#endif
 
         // Cache interpolated poses
         const Eigen::Matrix4d T_rs = options_.T_sr.inverse(); // this is robot to sensor which is Identity.
@@ -1194,6 +1323,21 @@ namespace  stateestimate{
             }
         }
 
+#ifdef DEBUG
+        // [DEBUG] Verify that cached poses are valid
+        bool poses_are_finite = true;
+        for(const auto& pair : T_ms_cache_map) {
+            if (!pair.second.allFinite()) {
+                poses_are_finite = false;
+                std::cout << "[MAP DEBUG] CRITICAL: Cached pose for timestamp " << pair.first << " is NOT finite!" << std::endl;
+                break;
+            }
+        }
+        if (poses_are_finite) {
+            std::cout << "[MAP DEBUG] All " << T_ms_cache_map.size() << " cached poses are finite." << std::endl;
+        }
+#endif
+
         // Apply transformations
         if (frame.size() < static_cast<size_t>(options_.sequential_threshold)) {
             // Sequential point transformation
@@ -1221,8 +1365,28 @@ namespace  stateestimate{
                 });
         }
 
+#ifdef DEBUG
+        // [DEBUG] Verify that transformed points are valid
+        bool points_are_finite = true;
+        for(const auto& point : frame) {
+            if(!point.pt.allFinite()) {
+                points_are_finite = false;
+                std::cout << "[MAP DEBUG] CRITICAL: Transformed point `pt` is NOT finite!" << std::endl;
+                break;
+            }
+        }
+        if (points_are_finite) {
+            std::cout << "[MAP DEBUG] All transformed point coordinates are finite." << std::endl;
+        }
+#endif
+
         // Update map
         map_.add(frame, kSizeVoxelMap, kMaxNumPointsInVoxel, kMinDistancePoints);
+
+#ifdef DEBUG
+        std::cout << "[MAP DEBUG] After map_.add(), map now contains " << map_.NumPoints() << " points." << std::endl;
+#endif
+
         if (options_.filter_lifetimes) {
             map_.update_and_filter_lifetimes();
         }
@@ -1235,6 +1399,13 @@ namespace  stateestimate{
         const double kMaxDistance = options_.max_distance;
         const Eigen::Vector3d location = trajectory_[index_frame].end_t;
         map_.remove(location, kMaxDistance);
+
+#ifdef DEBUG
+        std::cout << "[MAP DEBUG] Removing points farther than " << kMaxDistance << "m from " << location.transpose() << std::endl;
+        std::cout << "[MAP DEBUG] After map_.remove(), map size is now " << map_.NumPoints() << " points." << std::endl;
+        std::cout << "--- [MAP DEBUG] Finished updateMap ---" << std::endl;
+#endif
+
     }
 
     // ########################################################################
@@ -1328,7 +1499,8 @@ namespace  stateestimate{
 #ifdef DEBUG
         std::cout<< "[DEBUG GRAVITY INIT] T_mi:" << std::endl 
              << T_mi_var->value().matrix() << std::endl
-             << "T_mi_var: " << T_mi_var->value().vec() << std::endl;
+             << "T_mi_var: "  << std::endl 
+             << T_mi_var->value().vec() << std::endl;
 #endif
         
         return T_mi_var->value().vec();
@@ -1836,7 +2008,7 @@ namespace  stateestimate{
                 sliding_window_filter_->marginalizeVariable(marg_vars);
 #ifdef DEBUG
                 std::cout << std::fixed << std::setprecision(12) 
-                << "Marginalizing time (inclusive): " << begin_marg_time << " - " << end_marg_time << ", with num states: " << num_states << std::endl;
+                << "[ICP DEBUG] Marginalizing time: " << begin_marg_time << " - " << end_marg_time << ", with num states: " << num_states << std::endl;
 #endif
             }
 
@@ -2789,22 +2961,25 @@ namespace  stateestimate{
         // Step 54: Validate final estimate parameters
         // Ensures keypoints, velocities, and accelerations are valid
 #ifdef DEBUG
+        std::cout << "[ICP DEBUG] ESTIMATED PARAMETER" << std::endl;
         std::cout << "Number of keypoints used in CT-ICP : " << N_matches << std::endl;
         std::cout << "v_begin: " << v_begin.transpose() << std::endl;
         std::cout << "v_end: " << v_end.transpose() << std::endl;
         std::cout << "a_begin: " << a_begin.transpose() << std::endl;
         std::cout << "a_end: " << a_end.transpose() << std::endl;
-
-        for (size_t i = 0; i < timer.size(); i++) {std::cout << "Elapsed " << timer[i].first << *(timer[i].second) << std::endl;}
         std::cout << "Number iterations CT-ICP : " << options_.num_iters_icp << std::endl;
         std::cout << "Translation Begin: " << trajectory_[index_frame].begin_t.transpose() << std::endl;
         std::cout << "Translation End: " << trajectory_[index_frame].end_t.transpose() << std::endl;
 #endif
 
 #ifdef DEBUG
-    // [DEBUG] Final status report before returning
-    std::cout << "[ICP DEBUG] Finished ICP for frame " << index_frame << ". Success: " << (icp_success ? "true" : "false") << std::endl;
-    std::cout << "--- [END ICP DEBUG | Frame " << index_frame << "] ---\n" << std::endl;
+        std::cout << "[ICP DEBUG] INNER LOOP TIMERS" << std::endl;
+        for (size_t i = 0; i < timer.size(); i++) {
+            std::cout << "Elapsed " << timer[i].first << *(timer[i].second) << std::endl;
+        }
+        // [DEBUG] Final status report before returning
+        std::cout << "[ICP DEBUG] Finished ICP for frame " << index_frame << ". Success: " << (icp_success ? "true" : "false") << std::endl;
+        std::cout << "--- [END ICP DEBUG | Frame " << index_frame << "] ---\n" << std::endl;
 #endif
 
         // Step 55: Return success status
