@@ -1700,7 +1700,7 @@ namespace  stateestimate{
 #ifdef DEBUG
         // [DEBUG] Check the calculated time difference
         std::cout << std::fixed << std::setprecision(12) <<
-        "[ICP DEBUG] Time difference (TIME_DIFF): " << TIME_DIFF << "s" << std::endl;
+        "[ICP DEBUG] Time difference : " << TIME_DIFF << "s" << std::endl;
         if (!std::isfinite(TIME_DIFF) || TIME_DIFF <= 0) {
             std::cout << "[ICP DEBUG] CRITICAL: Invalid TIME_DIFF!" << std::endl;
         }
@@ -2826,7 +2826,7 @@ namespace  stateestimate{
                 diff_acc < (options_.threshold_translation_norm * 100.0 + options_.threshold_orientation_norm * 100.0)) {
                 if (options_.debug_print) {
 #ifdef DEBUG
-                    std::cout << "ICP: Finished with N=" << iter << " ICP iterations" << std::endl;
+                    std::cout << "[ICP DEBUG] Finished with N=" << iter << " ICP iterations" << std::endl;
 #endif
                 }
                 if (options_.break_icp_early) {
@@ -2874,8 +2874,8 @@ namespace  stateestimate{
         }
 
 #ifdef DEBUG
-        std::cout << "number of variables: " << sliding_window_filter_->getNumberOfVariables() << std::endl;
-        std::cout << "number of cost terms: " << sliding_window_filter_->getNumberOfCostTerms() << std::endl;
+        std::cout << "[ICP DEBUG] number of variables: " << sliding_window_filter_->getNumberOfVariables() << std::endl;
+        std::cout << "[ICP DEBUG] number of cost terms: " << sliding_window_filter_->getNumberOfCostTerms() << std::endl;
 #endif
 
         // Step 50: Validate and optimize the sliding window filter
