@@ -1501,7 +1501,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         std::cout<< "[DEBUG GRAVITY INIT] T_mi:" << std::endl 
-             << T_mi_var->value().matrix() << std::endl
+             << T_mi_var->value().matrix() << std::endl;
         std::cout << "[DEBUG GRAVITY INIT] T_mi_var: "  << std::endl 
              << T_mi_var->value().vec() << std::endl;
 #endif
