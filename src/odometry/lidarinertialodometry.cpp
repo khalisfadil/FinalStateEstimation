@@ -983,7 +983,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         if (!timer.empty()) timer[3].second->stop();
-        std::cout << "[REG DEBUG] Map size is now: " << map_.total_points_ << std::endl;
+        std::cout << "[REG DEBUG] Map size is now: " << map_.size() << std::endl;
 #endif
 
         // Step 8: Correct point cloud positions
@@ -1384,7 +1384,7 @@ namespace  stateestimate{
         map_.add(frame, kSizeVoxelMap, kMaxNumPointsInVoxel, kMinDistancePoints);
 
 #ifdef DEBUG
-        std::cout << "[MAP DEBUG] After map_.add(), map now contains " << map_.total_points_ << " points." << std::endl;
+        std::cout << "[MAP DEBUG] After map_.add(), map now contains " << map_.size() << " points." << std::endl;
 #endif
 
         if (options_.filter_lifetimes) {
@@ -1402,7 +1402,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         std::cout << "[MAP DEBUG] Removing points farther than " << kMaxDistance << "m from " << location.transpose() << std::endl;
-        std::cout << "[MAP DEBUG] After map_.remove(), map size is now " << map_.total_points_ << " points." << std::endl;
+        std::cout << "[MAP DEBUG] After map_.remove(), map size is now " << map_.size() << " points." << std::endl;
         std::cout << "--- [MAP DEBUG] Finished updateMap ---" << std::endl;
 #endif
 
@@ -2718,7 +2718,7 @@ namespace  stateestimate{
                 std::cout << "[ICP DEBUG] Error : not enough keypoints selected in icp !" << std::endl;
                 std::cout << "[ICP DEBUG] Number_of_residuals : " << N_matches << std::endl;
                 // [DEBUG] Add a check on map size
-                std::cout << "[ICP DEBUG] Map size: " << map_.total_points_ << " points." << std::endl;
+                std::cout << "[ICP DEBUG] Map size: " << map_.size() << " points." << std::endl;
 #endif
                 icp_success = false;
                 break; // Exit the ICP loop if insufficient keypoints
