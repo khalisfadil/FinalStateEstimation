@@ -1378,16 +1378,13 @@ namespace  stateestimate{
                 break;
             }
         }
-        if (points_are_finite) {
-            std::cout << "[MAP DEBUG] All transformed point coordinates are finite." << std::endl;
-        }
 #endif
 
         // Update map
         map_.add(frame, kSizeVoxelMap, kMaxNumPointsInVoxel, kMinDistancePoints);
 
 #ifdef DEBUG
-        std::cout << "[MAP DEBUG] After map_.add(), map now contains " << map_.size() << " points." << std::endl;
+        std::cout << "[MAP DEBUG] Map size after adding new points " << map_.size() << " points." << std::endl;
 #endif
 
         if (options_.filter_lifetimes) {
@@ -1405,8 +1402,8 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         std::cout << "[MAP DEBUG] Removing points farther than " << kMaxDistance << "m from " << location.transpose() << std::endl;
-        std::cout << "[MAP DEBUG] After map_.remove(), map size is now " << map_.size() << " points." << std::endl;
-        std::cout << "--- [MAP DEBUG] Finished updateMap ---" << std::endl;
+        std::cout << "[MAP DEBUG] Map size after outlier point removal" << map_.size() << " points." << std::endl;
+        std::cout << "--- [MAP DEBUG] Finished updateMap ---\n" << std::endl;
 #endif
 
     }
@@ -2473,6 +2470,18 @@ namespace  stateestimate{
             swf_inside_icp = true; // Use sliding window filter after initial frames
         }
 
+        // ##################################################################
+        // ### BUG FIX: ADD THIS CALL RIGHT HERE ###
+        // ##################################################################
+        // This is the crucial first transformation. It moves the keypoints from
+        // the sensor's local frame into the world frame based on your initial motion guess.
+        // Without this, the first search for neighbors will fail.
+#ifdef DEBUG
+        std::cout << "[ICP DEBUG] Performing initial keypoint transformation before ICP loop." << std::endl;
+#endif
+        transform_keypoints();
+        // ##################################################################
+
         ///################################################################################
 
         // Step 43: Start ICP optimization loop
@@ -2837,6 +2846,9 @@ namespace  stateestimate{
             // Re-transform keypoints for the next iteration
 #ifdef DEBUG
             timer[0].second->start(); // Start update transform timer
+#endif
+#ifdef DEBUG
+        std::cout << "[ICP DEBUG] Performing initial keypoint transformation after ICP loop." << std::endl;
 #endif
             transform_keypoints(); // Updates keypoints.pt using the latest trajectory
 #ifdef DEBUG
