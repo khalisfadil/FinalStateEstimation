@@ -62,4 +62,8 @@ Montag, 21. Juli 2025 10:04
         - Creation: The recipe's only instruction is to call std::make_shared<lidarinertialodom>(json_path). This is the moment the lidarinertialodom object is finally constructed. Its constructor uses the json_path to load all its settings from the file.
         - Return: A pointer to the new, fully-configured lidarinertialodom object is returned to the SLAMPipeline.
     - learn about how virtual and override function work and use it in setInitialPose. polymorphism
+    - the hash technique in voxel.hpp redefined
+    - alot of bug identified. tomorrow I want to build inside target7 and potentially run with data. as the pipeline maybe finished.
 --------------------------------------------------------------------------------------------------------------------------
+Dienstag, 22. Juli 2025 10:04
+    - 

@@ -2245,7 +2245,7 @@ namespace  stateestimate{
             // HYBRID STRATEGY: Use sequential processing for small workloads to avoid parallel overhead.
             // Note: Add 'sequential_threshold' to your options struct to control this behavior.
 
-            if (keypoints.size() < options_.sequential_threshold) {
+            if (keypoints.size() < static_cast<size_t>(options_.sequential_threshold)) {
                 // --- SEQUENTIAL PATH ---
                 for (int i = 0; i < (int)keypoints.size(); i++) {
                     const auto &keypoint = keypoints[i];
