@@ -24,10 +24,10 @@ namespace  stateestimate{
         if (frame.empty()) return;
 
 #ifdef DEBUG
-        // [DEBUG] Log entry into the function and initial state
-        const size_t initial_size = frame.size();
-        std::cout << "[SUB_SAMPLE] Starting sub_sample_frame. Initial points: " << initial_size 
-              << ", Voxel Size: " << size_voxel << std::endl;
+        // // [DEBUG] Log entry into the function and initial state
+        // const size_t initial_size = frame.size();
+        // std::cout << "[SUB_SAMPLE] Starting sub_sample_frame. Initial points: " << initial_size 
+        //       << ", Voxel Size: " << size_voxel << std::endl;
 #endif
 
         using VoxelMap = tsl::robin_map<Voxel, Point3D, VoxelHash>;
@@ -36,7 +36,7 @@ namespace  stateestimate{
         VoxelMap voxel_map;
         if (frame.size() < static_cast<size_t>(sequential_threshold)) {
 #ifdef DEBUG
-        std::cout << "[SUB_SAMPLE] Using sequential path (size < " << sequential_threshold << ")." << std::endl;
+        // std::cout << "[SUB_SAMPLE] Using sequential path (size < " << sequential_threshold << ")." << std::endl;
 #endif
             // Use a simple sequential path for small frames
             voxel_map.reserve(frame.size() / 2);
@@ -54,14 +54,14 @@ namespace  stateestimate{
             }
         } else {
 #ifdef DEBUG
-            std::cout << "[SUB_SAMPLE] Using parallel path (build_voxel_map)." << std::endl;
+            // std::cout << "[SUB_SAMPLE] Using parallel path (build_voxel_map)." << std::endl;
 #endif
             // Use the efficient parallel builder for large frames
             build_voxel_map(frame, size_voxel, voxel_map, sequential_threshold);
         }
 
 #ifdef DEBUG
-        std::cout << "[SUB_SAMPLE] Voxel map created with " << voxel_map.size() << " unique voxels." << std::endl;
+        // std::cout << "[SUB_SAMPLE] Voxel map created with " << voxel_map.size() << " unique voxels." << std::endl;
 #endif
 
         // Step 2: Rebuild the frame with the downsampled points
@@ -118,8 +118,8 @@ namespace  stateestimate{
         if (frame.empty()) return;
 
 #ifdef DEBUG
-        const size_t initial_size = frame.size();
-        std::cout << "[OUTLIER_REMOVAL] Starting. Initial points: " << initial_size << ", Voxel Size: " << size_voxel << std::endl;
+        // const size_t initial_size = frame.size();
+        // std::cout << "[OUTLIER_REMOVAL] Starting. Initial points: " << initial_size << ", Voxel Size: " << size_voxel << std::endl;
 #endif
 
         using VoxelMap = tsl::robin_map<Voxel, Point3D, VoxelHash>;
@@ -139,8 +139,8 @@ namespace  stateestimate{
         }
 
 #ifdef DEBUG
-        const size_t downsampled_size = voxel_map.size();
-        std::cout << "[OUTLIER_REMOVAL] After downsampling, points: " << downsampled_size << std::endl;
+        // const size_t downsampled_size = voxel_map.size();
+        // std::cout << "[OUTLIER_REMOVAL] After downsampling, points: " << downsampled_size << std::endl;
 #endif
 
 
@@ -151,7 +151,7 @@ namespace  stateestimate{
         const bool approximate = true;
 
 #ifdef DEBUG
-        std::cout << "[OUTLIER_REMOVAL] ROR params: min_pts=" << ror_min_pts << ", neighbor_search_k=" << k << std::endl;
+        // std::cout << "[OUTLIER_REMOVAL] ROR params: min_pts=" << ror_min_pts << ", neighbor_search_k=" << k << std::endl;
 #endif
 
         // Step 3: Parallel filter. We can iterate directly over the keys of the map.
@@ -208,10 +208,10 @@ namespace  stateestimate{
         frame.shrink_to_fit();
 
 #ifdef DEBUG
-        std::cout << "[OUTLIER_REMOVAL] After ROR filter, points kept: " << points_kept 
-                << " (Removed " << downsampled_size - points_kept << " outliers)." << std::endl;
-        std::cout << "[OUTLIER_REMOVAL] Finished. Final points: " << frame.size() 
-                << " (Total reduction: " << initial_size - frame.size() << ")." << std::endl;
+        // std::cout << "[OUTLIER_REMOVAL] After ROR filter, points kept: " << points_kept 
+        //         << " (Removed " << downsampled_size - points_kept << " outliers)." << std::endl;
+        // std::cout << "[OUTLIER_REMOVAL] Finished. Final points: " << frame.size() 
+        //         << " (Total reduction: " << initial_size - frame.size() << ")." << std::endl;
 #endif
     }
 
@@ -223,7 +223,7 @@ namespace  stateestimate{
                                      double size_voxel_subsampling, int sequential_threshold) {
 
 #ifdef DEBUG
-        std::cout << "[GRID_SAMPLING] Starting grid_sampling. Input points: " << frame.size() << std::endl;
+        // std::cout << "[GRID_SAMPLING] Starting grid_sampling. Input points: " << frame.size() << std::endl;
 #endif
 
         // Step 1: Clear the output keypoints vector to ensure it starts empty
@@ -264,7 +264,7 @@ namespace  stateestimate{
         keypoints.shrink_to_fit();
 
 #ifdef DEBUG
-        std::cout << "[GRID_SAMPLING] Finished. Output keypoints: " << keypoints.size() << std::endl;
+        // std::cout << "[GRID_SAMPLING] Finished. Output keypoints: " << keypoints.size() << std::endl;
 #endif
     }
 
@@ -283,14 +283,14 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [DEBUG] Log function entry and number of input points
-        std::cout << "[COMP_NEIGH] Processing neighborhood with " << point_count << " points." << std::endl;
+        // std::cout << "[COMP_NEIGH] Processing neighborhood with " << point_count << " points." << std::endl;
 #endif
 
         // --- Handle Edge Cases ---
         if (point_count < 2) {
 #ifdef DEBUG
             // [DEBUG] Log when an edge case is triggered
-            std::cout << "[COMP_NEIGH] Edge case: point_count < 2. Returning default values." << std::endl;
+            // std::cout << "[COMP_NEIGH] Edge case: point_count < 2. Returning default values." << std::endl;
 #endif
             if (point_count == 1) {
                 neighborhood.center = points[0];
@@ -362,7 +362,7 @@ namespace  stateestimate{
         if (!neighborhood.covariance.allFinite()) {
             std::cout << "[COMP_NEIGH] CRITICAL: Covariance matrix is NOT finite!" << std::endl;
         }
-        std::cout << "[COMP_NEIGH] Covariance Matrix:\n" << neighborhood.covariance << std::endl;
+        // std::cout << "[COMP_NEIGH] Covariance Matrix:\n" << neighborhood.covariance << std::endl;
 #endif
 
         // --- Perform PCA via Eigen Decomposition to find the normal vector and planarity ---
@@ -392,8 +392,8 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [DEBUG] Print eigenvalues to check for negative or NaN values
-        std::cout << "[COMP_NEIGH] Eigenvalues (lambda_0, lambda_1, lambda_2): " 
-                << eigenvalues.transpose() << std::endl;
+        // std::cout << "[COMP_NEIGH] Eigenvalues (lambda_0, lambda_1, lambda_2): " 
+        //         << eigenvalues.transpose() << std::endl;
         if (!eigenvalues.allFinite()) {
             std::cout << "[COMP_NEIGH] CRITICAL: Eigenvalues are NOT finite!" << std::endl;
         }
@@ -406,7 +406,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [DEBUG] Print intermediate sigma values
-        std::cout << "[COMP_NEIGH] Sigmas (s3, s2, s1): " << sigma3 << ", " << sigma2 << ", " << sigma1 << std::endl;
+        // std::cout << "[COMP_NEIGH] Sigmas (s3, s2, s1): " << sigma3 << ", " << sigma2 << ", " << sigma1 << std::endl;
 #endif
 
         // Planarity: 1 for a perfect plane (sigma3=0), 0 for a line (sigma2=sigma3=0) or sphere (sigma1=sigma2=sigma3)
@@ -416,15 +416,15 @@ namespace  stateestimate{
         } else {
 #ifdef DEBUG
             // [DEBUG] Log when the largest std dev is close to zero
-            std::cout << "[COMP_NEIGH] Warning: Largest eigenvalue (sigma1) is near zero. Setting a2D to 0." << std::endl;
+            // std::cout << "[COMP_NEIGH] Warning: Largest eigenvalue (sigma1) is near zero. Setting a2D to 0." << std::endl;
 #endif
             neighborhood.a2D = 0.0;
         }
 
 #ifdef DEBUG
         // [DEBUG] Print final computed values before the check and return
-        std::cout << "[COMP_NEIGH] Final Normal: " << neighborhood.normal.transpose() << std::endl;
-        std::cout << "[COMP_NEIGH] Final a2D (Planarity): " << neighborhood.a2D << std::endl;
+        // std::cout << "[COMP_NEIGH] Final Normal: " << neighborhood.normal.transpose() << std::endl;
+        // std::cout << "[COMP_NEIGH] Final a2D (Planarity): " << neighborhood.a2D << std::endl;
 #endif
         
         if (!std::isfinite(neighborhood.a2D)) {
@@ -798,7 +798,7 @@ namespace  stateestimate{
         // Check if the input point cloud is empty; return failure if so
         if (const_frame.pointcloud.empty()) {
 #ifdef DEBUG
-            std::cout << "[REG DEBUG] Frame " << trajectory_.size() << " REJECTED: Input point cloud is empty." << std::endl;
+            // std::cout << "[REG DEBUG] Frame " << trajectory_.size() << " REJECTED: Input point cloud is empty." << std::endl;
 #endif
             summary.success = false;
             return summary;
@@ -819,11 +819,11 @@ namespace  stateestimate{
         // Set up timestamp and motion data for the new frame
         initializeTimestamp(index_frame, const_frame);                                  //####!!! 1 tbb included // find the min and max timestamp in a single frame
 
-        #ifdef DEBUG
+#ifdef DEBUG
         // [DEBUG] Check the timestamps immediately after they are calculated
-        std::cout << std::fixed << std::setprecision(12) 
-                  << "[REG DEBUG] After initializeTimestamp: begin=" << trajectory_[index_frame].begin_timestamp
-                  << ", end=" << trajectory_[index_frame].end_timestamp << std::endl;
+        // std::cout << std::fixed << std::setprecision(12) 
+        //           << "[REG DEBUG] After initializeTimestamp: begin=" << trajectory_[index_frame].begin_timestamp
+        //           << ", end=" << trajectory_[index_frame].end_timestamp << std::endl;
 #endif
 
         initializeMotion(index_frame);                                                  //####!!! 2 // estimate the motion based on prev and prev*prev frame
@@ -844,7 +844,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         if (!timer.empty()) timer[0].second->stop();
-        std::cout << "[REG DEBUG] After initializeFrame, size is: " << frame.size() << std::endl;
+        // std::cout << "[REG DEBUG] After initializeFrame, size is: " << frame.size() << std::endl;
 #endif
 
         // Step 5: Process frame based on frame index
@@ -1276,11 +1276,11 @@ namespace  stateestimate{
         }
 
 #ifdef DEBUG
-        std::cout << "[MAP DEBUG] Building interpolation trajectory from state index " << start_idx 
-                << " to " << (start_idx + num_states - 1) << " (" << num_states << " states)." << std::endl;
-        std::cout << "[MAP DEBUG] Trajectory covers time range (inclusive): " << std::fixed << std::setprecision(12) 
-                << begin_slam_time.seconds() << " - " << end_slam_time.seconds() 
-                << ", with num states: " << num_states << std::endl;
+        // std::cout << "[MAP DEBUG] Building interpolation trajectory from state index " << start_idx 
+        //         << " to " << (start_idx + num_states - 1) << " (" << num_states << " states)." << std::endl;
+        // std::cout << "[MAP DEBUG] Trajectory covers time range (inclusive): " << std::fixed << std::setprecision(12) 
+        //         << begin_slam_time.seconds() << " - " << end_slam_time.seconds() 
+        //         << ", with num states: " << num_states << std::endl;
 #endif
 
         // Collect unique timestamps
@@ -1502,7 +1502,7 @@ namespace  stateestimate{
 #ifdef DEBUG
         std::cout<< "[DEBUG GRAVITY INIT] T_mi:" << std::endl 
              << T_mi_var->value().matrix() << std::endl
-             << "T_mi_var: "  << std::endl 
+        std::cout << "[DEBUG GRAVITY INIT] T_mi_var: "  << std::endl 
              << T_mi_var->value().vec() << std::endl;
 #endif
         
