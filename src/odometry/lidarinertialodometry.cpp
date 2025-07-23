@@ -1622,15 +1622,15 @@ namespace  stateestimate{
         const auto prev_imu_biases_var = PREV_VAR.imu_biases; // IMU biases variable
         auto prev_T_mi_var = PREV_VAR.T_mi; // T_mi variable (non-const for updates)
 
-        if (index_frame == 1) {
-#ifdef DEBUG
-            std::cout << "[ICP DEBUG] Frame 1: Locking initial state variables to improve stability." << std::endl;
-#endif
-            prev_T_rm_var->locked() = true;
-            prev_w_mr_inr_var->locked() = true;
-            prev_dw_mr_inr_var->locked() = true;
-            prev_imu_biases_var->locked() = true;
-        }
+//         if (index_frame == 1) {
+// #ifdef DEBUG
+//             std::cout << "[ICP DEBUG] Frame 1: Locking initial state variables to improve stability." << std::endl;
+// #endif
+//             prev_T_rm_var->locked() = true;
+//             prev_w_mr_inr_var->locked() = true;
+//             prev_dw_mr_inr_var->locked() = true;
+//             prev_imu_biases_var->locked() = true;
+//         }
 
         // Step 13: Prepare ground truth IMU-to-map transformation (T_mi_gt)
         // xi_ig (assumed 6D vector) defines the ground truth T_mi (rotation + translation)
@@ -2018,7 +2018,7 @@ namespace  stateestimate{
                 sliding_window_filter_->marginalizeVariable(marg_vars);
 #ifdef DEBUG
                 std::cout << std::fixed << std::setprecision(12) 
-                << "[ICP DEBUG] Marginalizing time: " << begin_marg_time << " - " << end_marg_time << ", with num states: " << num_states << std::endl;
+                << "[ICP DEBUG] Marginalizing time: " << begin_marg_time - end_marg_time << ", with num states: " << num_states << std::endl;
 #endif
             }
 

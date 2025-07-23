@@ -65,5 +65,8 @@ Montag, 21. Juli 2025 10:04
     - the hash technique in voxel.hpp redefined
     - alot of bug identified. tomorrow I want to build inside target7 and potentially run with data. as the pipeline maybe finished.
 --------------------------------------------------------------------------------------------------------------------------
-Dienstag, 22. Juli 2025 10:04
-    - 
+Mittwoch, 23. Juli 2025 10:32
+    - lidar raw give measurement timestamp in nanosecond
+    - in lidar decode we convert it into sec
+    - in lidarinertialodometry.hpp, in intializetimestamp, the begin and end of the index of current frame is define from the lidar data which is timed in second.
+    - there is a small detail where if traj::time take value in double, its know that is in second.

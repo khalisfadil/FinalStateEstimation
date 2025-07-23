@@ -133,8 +133,8 @@ namespace stateestimate {
         }
 
         // --- Timestamps & Initialization Flags ---
-        double begin_timestamp = 0.0;     ///< Start timestamp of the frame.
-        double end_timestamp = 1.0;       ///< End timestamp of the frame.
+        double begin_timestamp = 0.0;     ///< Start timestamp of the frame. THIS MUST BE IN SECOND
+        double end_timestamp = 1.0;       ///< End timestamp of the frame.  THIS MUST BE IN SECOND
         bool eval_time_init = false;      ///< Flag indicating if a custom evaluation time has been set.
         bool mid_pose_init = false;       ///< Flag indicating if an explicit mid-pose has been set.
 
