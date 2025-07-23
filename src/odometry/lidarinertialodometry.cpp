@@ -596,10 +596,10 @@ namespace  stateestimate{
             if (odometry_options.contains("use_T_mi_prior_after_init")) parsed_options.use_T_mi_prior_after_init = odometry_options["use_T_mi_prior_after_init"].get<bool>();
             if (odometry_options.contains("use_bias_prior_after_init")) parsed_options.use_bias_prior_after_init = odometry_options["use_bias_prior_after_init"].get<bool>();
 
-            if (odometry_options.contains("T_rm_init") && odometry_options["T_rm_init"].is_array() && odometry_options["T_rm_init"].size() == 16) {
+            if (odometry_options.contains("T_mr_init") && odometry_options["T_mr_init"].is_array() && odometry_options["T_mr_init"].size() == 16) {
                 for (int i = 0; i < 4; ++i) {
                     for (int j = 0; j < 4; ++j) {
-                        parsed_options.T_rm_init(i, j) = odometry_options["T_rm_init"][i * 4 + j].get<double>();
+                        parsed_options.T_mr_init(i, j) = odometry_options["T_mr_init"][i * 4 + j].get<double>();
                     }
                 }
             }
@@ -709,8 +709,8 @@ namespace  stateestimate{
     // setInitialPose
     // ########################################################################
     
-    void lidarinertialodom::setInitialPose(const Eigen::Matrix4d& initial_pose) {
-        options_.T_rm_init = initial_pose;
+    void lidarinertialodom::initTmr(const Eigen::Matrix4d& T_mr) {
+        options_.T_mr_init = T_mr;
     }
 
     // ########################################################################
@@ -907,7 +907,7 @@ namespace  stateestimate{
 #endif
 
             // Define initial transformations and velocities
-            math::se3::Transformation T_rm(options_.T_rm_init);
+            math::se3::Transformation T_rm(options_.T_mr_init);
             math::se3::Transformation T_mi;
             math::se3::Transformation T_sr(options_.T_sr);
             Eigen::Matrix<double, 6, 1> w_mr_inr = Eigen::Matrix<double, 6, 1>::Zero();
@@ -1295,7 +1295,7 @@ namespace  stateestimate{
 #endif
 
         // Cache interpolated poses
-        const Eigen::Matrix4d T_rs = options_.T_sr.inverse(); // this is robot to sensor which is Identity.
+        const Eigen::Matrix4d T_rs = options_.T_sr.inverse(); // transformation of sensor relative to robot
 
         std::map<double, Eigen::Matrix4d> T_ms_cache_map;
         if (unique_point_times.size() < static_cast<size_t>(options_.sequential_threshold)) {
@@ -1424,7 +1424,7 @@ namespace  stateestimate{
     Eigen::Matrix<double, 6, 1> lidarinertialodom::initialize_gravity(const std::vector<finalicp::IMUData> &imu_data_vec) {
 
         // Initialize state variables
-        const auto T_rm_init = finalicp::se3::SE3StateVar::MakeShared(math::se3::Transformation(options_.T_rm_init));
+        const auto T_rm_init = finalicp::se3::SE3StateVar::MakeShared(math::se3::Transformation(options_.T_mr_init));
         math::se3::Transformation T_mi;
         const auto T_mi_var = finalicp::se3::SE3StateVar::MakeShared(T_mi);
         T_rm_init->locked() = true;
@@ -1806,7 +1806,7 @@ namespace  stateestimate{
             const auto& PREV_VAR = trajectory_vars_.at(prev_trajectory_var_index);
 
             // Define initial pose (T_rm, identity), velocity (w_mr_inr, zero), and acceleration (dw_mr_inr, zero)
-            math::se3::Transformation T_rm = math::se3::Transformation(options_.T_rm_init); // Identity transformation (no initial offset)
+            math::se3::Transformation T_rm = math::se3::Transformation(options_.T_mr_init); // Identity transformation (no initial offset)
             Eigen::Matrix<double, 6, 1> w_mr_inr = Eigen::Matrix<double, 6, 1>::Zero(); // Zero initial velocity
             Eigen::Matrix<double, 6, 1> dw_mr_inr = Eigen::Matrix<double, 6, 1>::Zero(); // Zero initial acceleration
 

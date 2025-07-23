@@ -72,3 +72,8 @@ Mittwoch, 23. Juli 2025 10:32
     - there is a small detail where if traj::time take value in double, its know that is in second.
     - I need to check the locking mechanism in finalicp
     - between log and gt, there is time delay like 4 frame for gt. its okay.
+    - alot of confussion because the of the transformation T_target_source(use by ROS) or T_source_target. I think I learn before is the old mehtod which use T_source_target.
+    - so I will stay with T_target_source because modern method use that.
+    - Cb2n function creates a matrix that transforms a vector from the body (robot) frame to the navigation (map) frame.
+    - defines the pose of a sensor s in the world frame e (ENU) as T_es. T_target_source. target frame, source of point.
+    - If the input LLA is the position of the robot, the output NED vector is the translation component of Tmr (T_map_robot). It represents the robot's position within the map frame.

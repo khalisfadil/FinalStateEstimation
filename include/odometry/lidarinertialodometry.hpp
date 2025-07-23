@@ -164,7 +164,7 @@ namespace stateestimate {
                 // Initial State Priors (for the very first frame)
                 // ----------------------------------------------------------------------------------
                 /// Programmatically set initial pose mean. Use setInitialPose() to populate this.
-                Eigen::Matrix<double, 4, 4> T_rm_init = Eigen::Matrix<double, 4, 4>::Identity();
+                Eigen::Matrix<double, 4, 4> T_mr_init = Eigen::Matrix<double, 4, 4>::Identity();
                 /// Initial uncertainty (covariance, $P_0$) for the robot's pose.
                 Eigen::Matrix<double, 6, 1> p0_pose = Eigen::Matrix<double, 6, 1>::Ones();
                 /// Initial uncertainty (covariance, $P_0$) for the robot's velocity.
@@ -188,7 +188,7 @@ namespace stateestimate {
             Trajectory trajectory() override;
             RegistrationSummary registerFrame(const DataFrame& frame) override;
 
-            void setInitialPose(const Eigen::Matrix4d& initial_pose) override;
+            void initTmr(const Eigen::Matrix4d& T_mr) override;
 
         private:
             inline double AngularDistance(const Eigen::Matrix3d& rota, const Eigen::Matrix3d& rotb);
