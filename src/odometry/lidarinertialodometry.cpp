@@ -1578,11 +1578,6 @@ namespace  stateestimate{
 
         // Step 7: Validate inputs and previous state
         // Ensure index_frame is valid and trajectory_vars_ is not empty
-#ifdef DEBUG
-        std::cout << std::fixed << std::setprecision(12) 
-        << "[ICP DEBUG] prev scan end time: " << trajectory_[index_frame - 1].end_timestamp 
-        << std::endl;
-#endif
         
         // Step 8: Get the previous frame's end timestamp
         // prev_time is the end time of the previous frame (index_frame - 1)
@@ -1674,24 +1669,21 @@ namespace  stateestimate{
         }
 
         ///################################################################################
-#ifdef DEBUG
-        std::cout << std::fixed << std::setprecision(12) 
-        << "[ICP DEBUG] curr scan end time: " << trajectory_[index_frame].end_timestamp << std::endl;
-#endif
 
         // Step 17: Get the current frame’s end timestamp
         // curr_time tells us when this frame ends
         const double CURR_TIME = trajectory_[index_frame].end_timestamp;
 
+#ifdef DEBUG
+        std::cout << std::fixed << std::setprecision(12) 
+        << "[ICP DEBUG] LOGGING: PREV_TIME: " << PREV_TIME << ", CURR_TIME: " << CURR_TIME << std::endl;
+#endif
+
         // [DEBUG] THIS IS THE MOST LIKELY CULPRIT
         if (CURR_TIME <= PREV_TIME) {
-
 #ifdef DEBUG
             std::cout << "[ICP DEBUG] CRITICAL: Zero or negative time difference between frames!" << std::endl;
-            std::cout << std::fixed << std::setprecision(12) << 
-            "[ICP DEBUG] PREV_TIME: " << PREV_TIME << ", CURR_TIME: " << CURR_TIME << std::endl;
 #endif
-            // Immediately fail to prevent division by zero
             return false;
         }
 

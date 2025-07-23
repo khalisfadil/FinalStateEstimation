@@ -70,3 +70,5 @@ Mittwoch, 23. Juli 2025 10:32
     - in lidar decode we convert it into sec
     - in lidarinertialodometry.hpp, in intializetimestamp, the begin and end of the index of current frame is define from the lidar data which is timed in second.
     - there is a small detail where if traj::time take value in double, its know that is in second.
+    - I need to check the locking mechanism in finalicp
+    - between log and gt, there is time delay like 4 frame for gt. its okay.
