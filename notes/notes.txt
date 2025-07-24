@@ -77,3 +77,40 @@ Mittwoch, 23. Juli 2025 10:32
     - Cb2n function creates a matrix that transforms a vector from the body (robot) frame to the navigation (map) frame.
     - defines the pose of a sensor s in the world frame e (ENU) as T_es. T_target_source. target frame, source of point.
     - If the input LLA is the position of the robot, the output NED vector is the translation component of Tmr (T_map_robot). It represents the robot's position within the map frame.
+--------------------------------------------------------------------------------------------------------------------------
+Donnerstag, 24. Juli 2025 10:14
+    - T_target_souce mean target is "change frame into" and source mean "change frame from". 
+    - T_rm "change frame from map into robot". T_mr "change frame from robot into map".
+    - TODO in initialized motion, the first frame should be initialized with Tmr
+    - "registration summary" contain R_ms and t_ms
+    - trajectory_ use T_ms // equivalent to T_mr
+    - auto &current_estimate = trajectory_.at(index_frame); is a pointer to the trajectory_
+    - which take current_estimate.begin_t = begin_T_ms.block<3, 1>(0, 3); // Begin translation
+    - and current_estimate.begin_R = begin_T_ms.block<3, 3>(0, 0); // Begin rotation
+    - Question! why use T_rm??
+    - T_rm is part of TrajectoryVar
+    - trajectory_vars_
+        - Internal state for the optimizer. These are the variables the SLAM backend adjusts to find the best solution.
+        - Continuous. It's a set of "knots" (pose, velocity, acceleration at specific times) that define a smooth, continuous trajectory.
+        - Pointers to StateVar objects (SE3StateVar, VSpaceStateVar). These are nodes in the optimization graph.
+        - Stores the pose of the robot in the map (Trm​).
+        - It's the input to the optimization problem. The icp function builds a trajectory from these variables to solve for the best motion.
+    - trajectory_
+        - User-facing output. This is the final result of the odometry that other parts of a system would use.
+        - Discrete. It's a sequence of Frame objects, each representing a distinct time interval (a single LiDAR scan).
+        - Concrete values (Eigen::Matrix3d, Eigen::Vector3d) and the raw Point3D data for each frame.
+        - Stores the pose of the sensor in the map (Tms​).
+        - It's primarily the output of the system. Its values are derived from the final optimized trajectory_vars_.
+    - SLAM_TRAJ
+        - The Blueprint 📝. It's a mathematical model that defines how pose, velocity, and acceleration are related over time.
+        - Local & Temporary. It is created at the beginning of each icp call and destroyed at the end.
+        - Interpolation & Constraint Generation. Its main jobs are to provide interpolated poses at any time t and to generate the motion model cost terms that link the state variables together.
+        - A set of mathematical equations describing a smooth curve.
+    - sliding_window_filter_
+        - The Problem Manager 🏗️. It holds the complete factor graph (all state variables and constraints) for the current window of frames.
+        - Persistent & Global. It's a class member that lives for the entire duration of the odometry process, evolving as new frames are added and old ones are removed.
+        - State & Constraint Management. Its main jobs are to addStateVariable, addCostTerm, and, crucially, to marginalizeVariable (remove old states while preserving their information).
+        - A database that stores all the control points and rules that the final curve must adhere to.
+        - initialize at lidar intertial odom and first called at icp line ~1966
+    - Define the marginalization time based on delay_adding_points
+        - const double marg_time = trajectory_.at(index_frame - options_.delay_adding_points - 1).end_timestamp;

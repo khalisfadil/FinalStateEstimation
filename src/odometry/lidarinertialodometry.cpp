@@ -143,7 +143,6 @@ namespace  stateestimate{
         // std::cout << "[OUTLIER_REMOVAL] After downsampling, points: " << downsampled_size << std::endl;
 #endif
 
-
         // Step 2: Set up ROR filter parameters
         const double ror_radius_sq = size_voxel * size_voxel * 3.0; // Use squared distance
         const int ror_min_pts = 3;
@@ -596,10 +595,10 @@ namespace  stateestimate{
             if (odometry_options.contains("use_T_mi_prior_after_init")) parsed_options.use_T_mi_prior_after_init = odometry_options["use_T_mi_prior_after_init"].get<bool>();
             if (odometry_options.contains("use_bias_prior_after_init")) parsed_options.use_bias_prior_after_init = odometry_options["use_bias_prior_after_init"].get<bool>();
 
-            if (odometry_options.contains("T_mr_init") && odometry_options["T_mr_init"].is_array() && odometry_options["T_mr_init"].size() == 16) {
+            if (odometry_options.contains("T_rm_init") && odometry_options["T_rm_init"].is_array() && odometry_options["T_rm_init"].size() == 16) {
                 for (int i = 0; i < 4; ++i) {
                     for (int j = 0; j < 4; ++j) {
-                        parsed_options.T_mr_init(i, j) = odometry_options["T_mr_init"][i * 4 + j].get<double>();
+                        parsed_options.T_rm_init(i, j) = odometry_options["T_rm_init"][i * 4 + j].get<double>();
                     }
                 }
             }
@@ -709,8 +708,8 @@ namespace  stateestimate{
     // setInitialPose
     // ########################################################################
     
-    void lidarinertialodom::initTmr(const Eigen::Matrix4d& T_mr) {
-        options_.T_mr_init = T_mr;
+    void lidarinertialodom::initT(const Eigen::Matrix4d& T) {
+        options_.T_rm_init = T;
     }
 
     // ########################################################################
@@ -840,6 +839,7 @@ namespace  stateestimate{
 #ifdef DEBUG
         if (!timer.empty()) timer[0].second->start();
 #endif
+        // this is deskewing process
         auto frame = initializeFrame(index_frame, const_frame.pointcloud);              //####!!! 3 tbb included // correct frame point cloud based on estimated motion
 
 #ifdef DEBUG
@@ -889,7 +889,7 @@ namespace  stateestimate{
                 std::cout << "[REG DEBUG] ICP failed for frame " << index_frame << ". Returning early." << std::endl;
 #endif
                 return summary;}
-        } else { // !!!!!!!!!!! this is responsible for initial frame
+        } else { // !!!!!!!!!!! this is responsible for initial frame 0 ######################
 
 #ifdef DEBUG
             // [DEBUG] Announce first frame initialization
@@ -907,7 +907,7 @@ namespace  stateestimate{
 #endif
 
             // Define initial transformations and velocities
-            math::se3::Transformation T_rm(options_.T_mr_init);
+            math::se3::Transformation T_rm(options_.T_rm_init);
             math::se3::Transformation T_mi;
             math::se3::Transformation T_sr(options_.T_sr);
             Eigen::Matrix<double, 6, 1> w_mr_inr = Eigen::Matrix<double, 6, 1>::Zero();
@@ -1041,7 +1041,6 @@ namespace  stateestimate{
 
         // Step 10: Output debug timers
         // Print timing information if debug mode is enabled
-
 #ifdef DEBUG
             std::cout << "OUTER LOOP TIMERS" << std::endl;
             for (size_t i = 0; i < timer.size(); i++) {
@@ -1117,31 +1116,58 @@ namespace  stateestimate{
     the prior two frames’ end poses and sets the begin pose to the previous frame’s end pose, 
     ensuring smooth motion initialization using Eigen for matrix operations.*/
 
-    void lidarinertialodom::initializeMotion(int index_frame) {
+    void lidarinertialodom::initializeMotion(int index_frame) {// the first frame should be initialized with Tmr
 
-        // Cache T_sr inverse
-        const Eigen::Matrix4d T_rs = options_.T_sr.inverse();// initial pose?
+        if (index_frame == 0) { //MAIN ALLERT as T_sr is identity. T_ms is exactly same as T_mr
+            // --- For the very first frame, use the ground truth initial pose ---
 
-        if (index_frame <= 1) {
-            // Initialize first two frames with T_rs
-            trajectory_[index_frame].begin_R = T_rs.block<3, 3>(0, 0);
-            trajectory_[index_frame].begin_t = T_rs.block<3, 1>(0, 3);
-            trajectory_[index_frame].end_R = T_rs.block<3, 3>(0, 0);
-            trajectory_[index_frame].end_t = T_rs.block<3, 1>(0, 3);
-        } else {
-            // Extrapolate end pose from previous two frames
+            // 1. Get the ground truth T_rm from options.
+            const Eigen::Matrix4d T_rm = options_.T_rm_init;
+
+            // 2. Efficiently compute its inverse to get T_mr.
+            Eigen::Matrix3d R_rm = T_rm.block<3, 3>(0, 0);
+            Eigen::Vector3d t_rm = T_rm.block<3, 1>(0, 3);
+
+            Eigen::Matrix3d R_mr = R_rm.transpose();
+            Eigen::Vector3d t_mr = -R_mr * t_rm;
+
+            Eigen::Matrix4d T_mr = Eigen::Matrix4d::Identity();
+            T_mr.block<3, 3>(0, 0) = R_mr;
+            T_mr.block<3, 1>(0, 3) = t_mr;
+
+            // 3. Get the transformation from sensor to robot (T_rs).
+            const Eigen::Matrix4d T_rs = options_.T_sr.inverse();
+
+            // 4. Calculate the initial sensor pose in the map: T_ms = T_mr * T_rs.
+            const Eigen::Matrix4d T_ms = T_mr * T_rs;
+
+            // 5. Set the trajectory's initial pose.
+            trajectory_[index_frame].begin_R = T_ms.block<3, 3>(0, 0);
+            trajectory_[index_frame].begin_t = T_ms.block<3, 1>(0, 3);
+            trajectory_[index_frame].end_R = T_ms.block<3, 3>(0, 0);
+            trajectory_[index_frame].end_t = T_ms.block<3, 1>(0, 3);
+
+        } else if (index_frame == 1) {
+            // For the second frame, its motion starts from the end of the first frame.
+            trajectory_[index_frame].begin_R = trajectory_[index_frame - 1].end_R;
+            trajectory_[index_frame].begin_t = trajectory_[index_frame - 1].end_t;
+            trajectory_[index_frame].end_R = trajectory_[index_frame - 1].end_R;
+            trajectory_[index_frame].end_t = trajectory_[index_frame - 1].end_t;
+        
+        } else { 
+            // For all subsequent frames, extrapolate motion from the previous two.
             const auto& prev = trajectory_[index_frame - 1];
             const auto& prev_prev = trajectory_[index_frame - 2];
-            
-            // Compute relative transformation
-            const Eigen::Matrix3d R_rel = prev.end_R * prev_prev.end_R.inverse();
-            const Eigen::Vector3d t_rel = prev.end_R * prev_prev.end_R.inverse() * (prev.end_t - prev_prev.end_t);
-            
-            // Extrapolate end pose
-            trajectory_[index_frame].end_R = R_rel * prev.end_R;
-            trajectory_[index_frame].end_t = prev.end_t + t_rel;
 
-            // Set begin pose to previous frame's end pose
+            // Compute relative transformation between previous sensor poses
+            const Eigen::Matrix3d R_rel = prev.end_R * prev_prev.end_R.transpose();
+            const Eigen::Vector3d t_rel = prev.end_t - prev_prev.end_t;
+
+            // Extrapolate the end pose of the current sensor frame
+            trajectory_[index_frame].end_R = R_rel * prev.end_R;
+            trajectory_[index_frame].end_t = prev.end_t + R_rel * t_rel; // Corrected: Transform t_rel into the new frame
+
+            // Set the begin pose to the previous frame's end pose
             trajectory_[index_frame].begin_R = prev.end_R;
             trajectory_[index_frame].begin_t = prev.end_t;
         }
@@ -1176,7 +1202,7 @@ namespace  stateestimate{
         std::shuffle(frame.begin(), frame.end(), g);
 
         // Validate poses
-        const auto& traj = trajectory_[index_frame];
+        const auto& traj = trajectory_[index_frame]; //contain R_ms and t_ms
 
         auto q_begin = Eigen::Quaterniond(traj.begin_R);
         auto q_end = Eigen::Quaterniond(traj.end_R);
@@ -1195,19 +1221,18 @@ namespace  stateestimate{
             // Parallel processing with TBB
             // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
             tbb::parallel_for(tbb::blocked_range<size_t>(0, frame.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
-                    for (size_t i = range.begin(); i != range.end(); ++i) {
-                        auto& point = frame[i];
-                        const double alpha = point.alpha_timestamp;
-                        if (alpha < 0.0 || alpha > 1.0 || !std::isfinite(alpha)) {
-                            throw std::runtime_error("Invalid alpha_timestamp in initializeFrame for frame " + std::to_string(index_frame));
-                        }
-                        const Eigen::Matrix3d R = q_begin.slerp(alpha, q_end).normalized().toRotationMatrix();
-                        const Eigen::Vector3d t = (1.0 - alpha) * t_begin + alpha * t_end;
-                        point.pt = R * point.raw_pt + t;
+                for (size_t i = range.begin(); i != range.end(); ++i) {
+                    auto& point = frame[i];
+                    const double alpha = point.alpha_timestamp;
+                    if (alpha < 0.0 || alpha > 1.0 || !std::isfinite(alpha)) {
+                        throw std::runtime_error("Invalid alpha_timestamp in initializeFrame for frame " + std::to_string(index_frame));
                     }
-                });
+                    const Eigen::Matrix3d R = q_begin.slerp(alpha, q_end).normalized().toRotationMatrix();
+                    const Eigen::Vector3d t = (1.0 - alpha) * t_begin + alpha * t_end;
+                    point.pt = R * point.raw_pt + t;
+                }
+            });
         }
-
         return frame;
     }
 
@@ -1424,7 +1449,7 @@ namespace  stateestimate{
     Eigen::Matrix<double, 6, 1> lidarinertialodom::initialize_gravity(const std::vector<finalicp::IMUData> &imu_data_vec) {
 
         // Initialize state variables
-        const auto T_rm_init = finalicp::se3::SE3StateVar::MakeShared(math::se3::Transformation(options_.T_mr_init));
+        const auto T_rm_init = finalicp::se3::SE3StateVar::MakeShared(math::se3::Transformation(options_.T_rm_init));
         math::se3::Transformation T_mi;
         const auto T_mi_var = finalicp::se3::SE3StateVar::MakeShared(T_mi);
         T_rm_init->locked() = true;
@@ -1806,7 +1831,7 @@ namespace  stateestimate{
             const auto& PREV_VAR = trajectory_vars_.at(prev_trajectory_var_index);
 
             // Define initial pose (T_rm, identity), velocity (w_mr_inr, zero), and acceleration (dw_mr_inr, zero)
-            math::se3::Transformation T_rm = math::se3::Transformation(options_.T_mr_init); // Identity transformation (no initial offset)
+            math::se3::Transformation T_rm = math::se3::Transformation(options_.T_rm_init); // Identity transformation (no initial offset)
             Eigen::Matrix<double, 6, 1> w_mr_inr = Eigen::Matrix<double, 6, 1>::Zero(); // Zero initial velocity
             Eigen::Matrix<double, 6, 1> dw_mr_inr = Eigen::Matrix<double, 6, 1>::Zero(); // Zero initial acceleration
 
@@ -2403,8 +2428,10 @@ namespace  stateestimate{
 #ifdef DEBUG
             timer[0].second->start(); // Start update transform timer
 #endif
+            // #### This just transform the point from sensor to robot frame
+            // sensor to robot frame is identity!
             const Eigen::Matrix4d T_rs_mat = options_.T_sr.inverse(); // Inverse sensor-to-robot transformation
-
+            
             if (keypoints.size() < static_cast<size_t>(options_.sequential_threshold)) {
                 // Sequential: Transform keypoints one by one for small sizes
                 for (size_t i = 0; i < keypoints.size(); ++i) {
