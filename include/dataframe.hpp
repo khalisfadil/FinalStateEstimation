@@ -14,7 +14,7 @@ namespace stateestimate {
         static constexpr size_t DEFAULT_IMU_CAPACITY = 15;           // ~10-15 IMU samples per Lidar frame
         static constexpr size_t DEFAULT_POSE_CAPACITY = 5;           // Small, as often unused
 
-        double timestamp;
+        double timestamp = 0.0;
         std::vector<Point3D> pointcloud;
         std::vector<finalicp::IMUData> imu_data_vec;
         std::vector<PoseData> pose_data_vec;

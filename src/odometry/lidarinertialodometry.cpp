@@ -1105,11 +1105,19 @@ namespace  stateestimate{
             min_timestamp = result.first;
             max_timestamp = result.second;
         }
+        // Calculate the midpoint of the scan
+        const double mid_timestamp = (max_timestamp + min_timestamp) / 2.0;
+
+#ifdef DEBUG
+            // [ADDED DEBUG] Print all calculated timestamps before assignment
+            std::cout << "--- [TIMESTAMP DEBUG] Frame " << index_frame << ": min=" << std::fixed << min_timestamp
+                    << ", max=" << max_timestamp << ", mid=" << mid_timestamp << " ---" << std::endl;
+#endif
 
         // Assign to trajectory
         trajectory_[index_frame].begin_timestamp = min_timestamp;
         trajectory_[index_frame].end_timestamp = max_timestamp;
-        trajectory_[index_frame].setEvalTime(const_frame.timestamp);
+        trajectory_[index_frame].setEvalTime(mid_timestamp);
     }
 
     // ########################################################################
@@ -2915,6 +2923,11 @@ namespace  stateestimate{
             timer[3].second->start(); // Start alignment timer
 #endif
 
+#ifdef DEBUG
+            // [ADDED DEBUG] Header for this block to show the current iteration
+            std::cout << "[ICP DEBUG] --- Updating State & Checking Convergence (Iteration " << iter << ") ---" << std::endl;
+#endif
+
             double diff_trans = 0.0, diff_rot = 0.0, diff_vel = 0.0, diff_acc = 0.0;
 
             // Update begin pose
@@ -2924,12 +2937,24 @@ namespace  stateestimate{
             diff_trans += (current_estimate.begin_t - begin_T_ms.block<3, 1>(0, 3)).norm();
             diff_rot += AngularDistance(current_estimate.begin_R, begin_T_ms.block<3, 3>(0, 0));
 
+#ifdef DEBUG
+            // [ADDED DEBUG] Print the change in the beginning pose translation
+            std::cout << "[ICP DEBUG] Begin Translation | Old: " << current_estimate.begin_t.transpose()
+                    << " | New: " << begin_T_ms.block<3, 1>(0, 3).transpose() << std::endl;
+#endif
+
             // Update end pose
             finalicp::traj::Time curr_end_slam_time(static_cast<double>(trajectory_[index_frame].end_timestamp));
             const Eigen::Matrix4d end_T_mr = SLAM_TRAJ->getPoseInterpolator(curr_end_slam_time)->value().inverse().matrix();
             const Eigen::Matrix4d end_T_ms = end_T_mr * options_.T_sr.inverse();
             diff_trans += (current_estimate.end_t - end_T_ms.block<3, 1>(0, 3)).norm();
             diff_rot += AngularDistance(current_estimate.end_R, end_T_ms.block<3, 3>(0, 0));
+
+#ifdef DEBUG
+            // [ADDED DEBUG] Print the change in the ending pose translation
+            std::cout << "[ICP DEBUG] End Translation   | Old: " << current_estimate.end_t.transpose()
+                    << " | New: " << end_T_ms.block<3, 1>(0, 3).transpose() << std::endl;
+#endif
 
             // Update velocities
             const auto vb = SLAM_TRAJ->getVelocityInterpolator(curr_begin_slam_time)->value();
