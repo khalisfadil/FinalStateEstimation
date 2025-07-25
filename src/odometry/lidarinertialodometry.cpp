@@ -1650,7 +1650,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
     // [DEBUG] Initial check at the start of the function
-    std::cout << "\n--- [ICP DEBUG | Frame " << index_frame << "] ---" << std::endl;
+    std::cout << "--- [ICP DEBUG | Frame " << index_frame << "] ---" << std::endl;
     std::cout << "[ICP DEBUG] Starting with " << keypoints.size() << " keypoints." << std::endl;
 #endif
 
@@ -2099,8 +2099,7 @@ namespace  stateestimate{
         if (index_frame > options_.delay_adding_points && options_.delay_adding_points >= 0) {
 
 #ifdef DEBUG
-            std::cout << "\n--- [MARG DEBUG | Frame " << index_frame << "] ---" << std::endl;
-            std::cout << "[MARG DEBUG] Condition (index_frame > delay_adding_points) met. Entering marginalization." << std::endl;
+            std::cout << "[ICP DEBUG] Condition (index_frame > delay_adding_points) met. Entering marginalization." << std::endl;
 #endif
 
             // Collect state variables to marginalize (from to_marginalize_ up to marg_time)
@@ -2122,7 +2121,7 @@ namespace  stateestimate{
 #ifdef DEBUG
                         // Check if the variables are valid *before* marginalizing them
                         if(!VAR.T_rm->value().matrix().allFinite()) {
-                           std::cout << "[MARG DEBUG] CRITICAL: VAR.T_rm at index " << i << " is NaN before marginalization!" << std::endl;
+                           std::cout << "[ICP DEBUG] CRITICAL: VAR.T_rm at index " << i << " is NaN before marginalization!" << std::endl;
                         }
 #endif
 
@@ -2147,8 +2146,8 @@ namespace  stateestimate{
             // Marginalize the collected variables if any
             if (!marg_vars.empty()) {
 #ifdef DEBUG
-                std::cout << "[MARG DEBUG] Collected " << num_states << " states to marginalize." << std::endl;
-                std::cout << "[MARG DEBUG] Calling sliding_window_filter_->marginalizeVariable()" << std::endl;
+                std::cout << "[ICP DEBUG] Collected " << num_states << " states to marginalize." << std::endl;
+                std::cout << "[ICP DEBUG] Calling sliding_window_filter_->marginalizeVariable()" << std::endl;
 #endif
 
                 sliding_window_filter_->marginalizeVariable(marg_vars);
@@ -2677,6 +2676,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [DEBUG] Check if keypoint coordinates are finite before association
+        std::cout << "[ICP DEBUG] Keypoint size: " << keypoints.size() << std::endl;
         bool keypoints_are_finite = true;
         for(const auto& kp : keypoints) {
             if (!kp.pt.allFinite()) {
@@ -2849,6 +2849,11 @@ namespace  stateestimate{
                 N_matches = meas_cost_terms.size();
 #endif
 
+#ifdef DEBUG
+            // [ADDED DEBUG] Print the number of matches found before checking
+            std::cout << "[ICP DEBUG] Found " << N_matches << " point-to-plane matches." << std::endl;
+#endif
+
             p2p_super_cost_term->initP2PMatches(); // Initialize point-to-plane matches
             for (const auto& cost : meas_cost_terms) {
                 problem->addCostTerm(cost); // Add point-to-plane cost terms
@@ -2878,9 +2883,9 @@ namespace  stateestimate{
             // Ensures enough matches for reliable optimization
             if (N_matches < options_.min_number_keypoints) {
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] Error : not enough keypoints selected in icp !" << std::endl;
-                std::cout << "[ICP DEBUG] Number_of_residuals : " << N_matches << std::endl;
-                // [DEBUG] Add a check on map size
+                std::cout << "[ICP DEBUG] CRITICAL: not enough keypoints selected in icp !" << std::endl;
+                std::cout << "[ICP DEBUG] Found: " << N_matches << " point-to-plane matches (residuals)." << std::endl;
+                std::cout << "[ICP DEBUG] Minimum required: " << options_.min_number_keypoints << std::endl;
                 std::cout << "[ICP DEBUG] Map size: " << map_.size() << " points." << std::endl;
 #endif
                 icp_success = false;
@@ -2965,7 +2970,7 @@ namespace  stateestimate{
                 }
                 if (curr_mid_slam_time.seconds() < trajectory_vars_[i].time.seconds() ||
                     curr_mid_slam_time.seconds() >= trajectory_vars_[i + 1].time.seconds()) {
-                    throw std::runtime_error("Mid time not within knot times in icp");
+                    throw std::runtime_error("(1) Mid time not within knot times in icp: " + std::to_string(curr_mid_slam_time.seconds()) + " ,at frame: " + std::to_string(index_frame));
                 }
                 current_estimate.mid_b = trajectory_vars_[i].imu_biases->value();
             }
@@ -3112,7 +3117,7 @@ namespace  stateestimate{
             if (i >= trajectory_vars_.size() - 1 ||
                 curr_mid_slam_time.seconds() < trajectory_vars_[i].time.seconds() ||
                 curr_mid_slam_time.seconds() >= trajectory_vars_[i + 1].time.seconds()) {
-                throw std::runtime_error("Mid time not within knot times in icp: " + std::to_string(curr_mid_slam_time.seconds()));
+                throw std::runtime_error("(2) Mid time not within knot times in icp: " + std::to_string(curr_mid_slam_time.seconds()) + " at frame: " + std::to_string(index_frame));
             }
 
             const auto bias_intp_eval = finalicp::vspace::VSpaceInterpolator<6>::MakeShared(curr_mid_slam_time, trajectory_vars_[i].imu_biases, trajectory_vars_[i].time, trajectory_vars_[i + 1].imu_biases, trajectory_vars_[i + 1].time);
