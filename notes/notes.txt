@@ -122,3 +122,5 @@ Donnerstag, 24. Juli 2025 10:14
 Freitag, 25. Juli 2025 12:12
     - paper idea: ""Performance Comparison of Single Merged LiDAR Factor versus Multiple Individual LiDAR Factors in LiDAR-Inertial Factor Graph Optimization for Marine Vehicle SLAM"  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     - I think I need to create the vizualization algo for my slam pipeline to check if the transformed Lidar data and the IMU is exactly as what I intend it todo.
+    - the problem come from the optimization process.gauss newton GaussNewtonSolverNVA
+    - I have been advice to isolate my cost term which maybe wrong.

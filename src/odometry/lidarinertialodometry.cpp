@@ -2637,11 +2637,10 @@ namespace  stateestimate{
         std::cout << "[ICP DEBUG] Performing initial keypoint transformation before ICP loop." << std::endl;
 #endif
         transform_keypoints();
-        // ##################################################################
 
-        ///################################################################################
-
-        // Step 43: Start ICP optimization loop
+        // ################################################################################
+        // Step 43: Start ICP optimization loop ################################################################################
+        // ################################################################################
         // Iterates to refine the trajectory using point-to-plane alignment
         for (int iter = 0; iter < options_.num_iters_icp; iter++) {
 #ifdef DEBUG
@@ -2698,8 +2697,6 @@ namespace  stateestimate{
              std::cout << "[ICP DEBUG] Keypoint coordinates are finite." << std::endl;
         }
 #endif
-// seems it stuck until here
-
         ///################################################################################
 
             // HYBRID STRATEGY: Use sequential processing for small workloads to avoid parallel overhead.
@@ -2866,22 +2863,23 @@ namespace  stateestimate{
             for (const auto& cost : meas_cost_terms) {
                 problem->addCostTerm(cost); // Add point-to-plane cost terms
             }
-            for (const auto& cost : imu_cost_terms) {
-                problem->addCostTerm(cost); // Add IMU cost terms
-            }
+            // for (const auto& cost : imu_cost_terms) {
+            //     problem->addCostTerm(cost); // Add IMU cost terms
+            // }
             for (const auto& cost : pose_meas_cost_terms) {
                 problem->addCostTerm(cost); // Add pose measurement cost terms
             }
-            for (const auto& cost : imu_prior_cost_terms) {
-                problem->addCostTerm(cost); // Add IMU bias prior cost terms
-            }
+            // for (const auto& cost : imu_prior_cost_terms) {
+            //     problem->addCostTerm(cost); // Add IMU bias prior cost terms
+            // }
             for (const auto& cost : T_mi_prior_cost_terms) {
                 problem->addCostTerm(cost); // Add T_mi prior cost terms
             }
             problem->addCostTerm(p2p_super_cost_term); // Add point-to-plane super cost term
-            if (options_.use_imu) {
-                problem->addCostTerm(imu_super_cost_term); // Add IMU super cost term
-            }
+
+            // if (options_.use_imu) {
+            //     problem->addCostTerm(imu_super_cost_term); // Add IMU super cost term
+            // }
 
 #ifdef DEBUG
             timer[1].second->stop(); // Stop association timer
@@ -3036,9 +3034,9 @@ namespace  stateestimate{
             timer[0].second->stop(); // Stop update transform timer
             timer[3].second->stop(); // Stop alignment timer
 #endif
-        } // End ICP optimization loop
-        
-        ///################################################################################
+        // ################################################################################
+        } // End ICP optimization loop ################################################################################
+        // ################################################################################
 
         // Step 49: Add cost terms to the sliding window filter
         // Includes state priors, point-to-plane, IMU, pose, and T_mi cost terms
@@ -3062,6 +3060,7 @@ namespace  stateestimate{
             sliding_window_filter_->addCostTerm(T_mi_prior_cost); // Add T_mi prior cost terms
         }
         sliding_window_filter_->addCostTerm(p2p_super_cost_term); // Add point-to-plane super cost term
+
         if (options_.use_imu) {
             sliding_window_filter_->addCostTerm(imu_super_cost_term); // Add IMU super cost term
         }
