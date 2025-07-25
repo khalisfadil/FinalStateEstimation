@@ -797,7 +797,7 @@ namespace  stateestimate{
         // Check if the input point cloud is empty; return failure if so
         if (const_frame.pointcloud.empty()) {
 #ifdef DEBUG
-            // std::cout << "[REG DEBUG] Frame " << trajectory_.size() << " REJECTED: Input point cloud is empty." << std::endl;
+            std::cout << "[REG DEBUG] CRITICAL: Frame " << trajectory_.size() << " REJECTED: Input point cloud is empty." << std::endl;
 #endif
             summary.success = false;
             return summary;
@@ -911,7 +911,12 @@ namespace  stateestimate{
 
             // Define initial transformations and velocities
             math::se3::Transformation T_rm(options_.T_rm_init);
-            math::se3::Transformation T_mi;
+
+            // Get the ground truth T_mi directly
+            const auto& initial_trajectory = trajectory_[index_frame];
+            math::se3::Transformation T_ms(initial_trajectory.begin_R, initial_trajectory.begin_t);
+            math::se3::Transformation T_mi_gt = T_ms; // Since sensors are aligned
+
             math::se3::Transformation T_sr(options_.T_sr);
             Eigen::Matrix<double, 6, 1> w_mr_inr = Eigen::Matrix<double, 6, 1>::Zero();
             Eigen::Matrix<double, 6, 1> dw_mr_inr = Eigen::Matrix<double, 6, 1>::Zero();
@@ -921,10 +926,11 @@ namespace  stateestimate{
             const double begin_time = trajectory_[index_frame].begin_timestamp;
             Time begin_slam_time(begin_time);
             auto begin_T_rm_var = SE3StateVar::MakeShared(T_rm);
-            auto begin_w_mr_inr_var = VSpaceStateVar<6>::MakeShared(w_mr_inr);           //begin velocity of the robot.
+            auto begin_w_mr_inr_var = VSpaceStateVar<6>::MakeShared(w_mr_inr);
             auto begin_dw_mr_inr_var = VSpaceStateVar<6>::MakeShared(dw_mr_inr);
             auto begin_imu_biases = VSpaceStateVar<6>::MakeShared(b_zero);
-            auto begin_T_mi_var = SE3StateVar::MakeShared(T_mi);
+            // Initialize T_mi_var DIRECTLY with the ground truth value
+            auto begin_T_mi_var = SE3StateVar::MakeShared(T_mi_gt); 
             trajectory_vars_.emplace_back(begin_slam_time, std::move(begin_T_rm_var), std::move(begin_w_mr_inr_var),
                                         std::move(begin_dw_mr_inr_var), std::move(begin_imu_biases), std::move(begin_T_mi_var));
 
@@ -935,7 +941,8 @@ namespace  stateestimate{
             auto end_w_mr_inr_var = VSpaceStateVar<6>::MakeShared(w_mr_inr);
             auto end_dw_mr_inr_var = VSpaceStateVar<6>::MakeShared(dw_mr_inr);
             auto end_imu_biases = VSpaceStateVar<6>::MakeShared(b_zero);
-            auto end_T_mi_var = SE3StateVar::MakeShared(T_mi);
+            // Initialize T_mi_var DIRECTLY with the ground truth value
+            auto end_T_mi_var = SE3StateVar::MakeShared(T_mi_gt); 
             trajectory_vars_.emplace_back(end_slam_time, std::move(end_T_rm_var), std::move(end_w_mr_inr_var),
                                         std::move(end_dw_mr_inr_var), std::move(end_imu_biases), std::move(end_T_mi_var));
 
@@ -943,18 +950,6 @@ namespace  stateestimate{
             std::cout << "[REG DEBUG] Frame 0: Created " << trajectory_vars_.size() << " initial state variables." << std::endl;
             std::cout << "[REG DEBUG] Frame 0 timestamps: begin=" << std::fixed << begin_time << ", end=" << end_time << std::endl;
 #endif
-
-            // Step 5d: Align gravity using IMU data
-            // Ensure proper orientation by aligning with gravity vector
-
-            Eigen::Matrix<double, 6, 1> xi_mi = initialize_gravity(const_frame.imu_data_vec);   //####!!! 6
-
-#ifdef DEBUG
-            std::cout << "[REG DEBUG] Frame 0: Gravity alignment vector (xi_mi): " << xi_mi.transpose() << std::endl;
-#endif
-
-            begin_T_mi_var->update(xi_mi);
-            end_T_mi_var->update(xi_mi);
 
             to_marginalize_ = 1;
 
@@ -1056,11 +1051,11 @@ namespace  stateestimate{
         // Step 10: Output debug timers
         // Print timing information if debug mode is enabled
 #ifdef DEBUG
-            std::cout << "OUTER LOOP TIMERS" << std::endl;
+            std::cout << "[REG DEBUG] OUTER LOOP TIMERS" << std::endl;
             for (size_t i = 0; i < timer.size(); i++) {
                 std::cout << "Elapsed " << timer[i].first << *(timer[i].second) << std::endl;
             }
-            std::cout << "+++ [REG DEBUG] Finished RegisterFrame for index " << index_frame << " +++\n" << std::endl;
+            std::cout << "+++ [REG DEBUG] Finished RegisterFrame for index " << index_frame << " +++" << std::endl;
 #endif
         return summary;
     }
@@ -1134,7 +1129,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [ADDED DEBUG] Announce entry into the function
-        std::cout << "+++ [MOTION DEBUG] Initializing motion for frame " << index_frame << ". +++" << std::endl;
+        std::cout << "--- [MOTION DEBUG] Initializing motion for frame " << index_frame << ". ---" << std::endl;
 #endif
 
         if (index_frame == 0) { //MAIN ALLERT as T_sr is identity. T_ms is exactly same as T_mr
@@ -1165,9 +1160,9 @@ namespace  stateestimate{
             std::cout << "[MOTION DEBUG] Frame 0: Using initial pose from options." << std::endl;
             std::cout << "[MOTION DEBUG] Frame 0: Initial Sensor Pose (T_ms):\n" << T_ms << std::endl;
             if (!T_ms.allFinite()) {
-                std::cout << "+++ [MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)! +++" << std::endl;
+                std::cout << "--- [MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)! ---" << std::endl;
             } else {
-                std::cout << "+++ [MOTION DEBUG] Initial pose T_ms is finite. +++" << std::endl;
+                std::cout << "--- [MOTION DEBUG] Initial pose T_ms is finite. ---" << std::endl;
             }
 #endif
             // 5. Set the trajectory's initial pose.
@@ -1189,9 +1184,9 @@ namespace  stateestimate{
         std::cout << "[MOTION DEBUG] Frame 1: Initial Pose (Rotation):\n" << trajectory_[index_frame].begin_R << std::endl;
         std::cout << "[MOTION DEBUG] Frame 1: Initial Pose (Translation): " << trajectory_[index_frame].begin_t.transpose() << std::endl;
         if (!trajectory_[index_frame].begin_R.allFinite() || !trajectory_[index_frame].end_R.allFinite() || !trajectory_[index_frame].begin_t.allFinite() || !trajectory_[index_frame].end_t.allFinite()) {
-            std::cout << "+++ [MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)! +++" << std::endl;
+            std::cout << "--- [MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)! ---" << std::endl;
         } else {
-            std::cout << "+++ [MOTION DEBUG] Initial pose T_ms is finite. +++" << std::endl;
+            std::cout << "--- [MOTION DEBUG] Initial pose T_ms is finite. ---" << std::endl;
         }
 #endif
         
@@ -1218,9 +1213,9 @@ namespace  stateestimate{
             std::cout << "[MOTION DEBUG] Relative Motion (t_rel): " << t_rel.transpose() << std::endl;
             std::cout << "[MOTION DEBUG] Extrapolated End Pose (Translation): " << trajectory_[index_frame].end_t.transpose() << std::endl;
             if (!trajectory_[index_frame].begin_R.allFinite() || !trajectory_[index_frame].end_R.allFinite() || !trajectory_[index_frame].begin_t.allFinite() || !trajectory_[index_frame].end_t.allFinite()) {
-                std::cout << "+++ [MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)! +++" << std::endl;
+                std::cout << "--- [MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)! ---" << std::endl;
             } else {
-                std::cout << "+++ [MOTION DEBUG] Initial pose T_ms is finite. +++" << std::endl;
+                std::cout << "--- [MOTION DEBUG] Initial pose T_ms is finite. ---" << std::endl;
             }
 #endif
         }
@@ -1243,7 +1238,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [ADDED DEBUG] Announce entry and check input size
-        std::cout << "+++ [FRAME INIT DEBUG] Initializing frame " << index_frame << " with " << const_frame.size() << " input points. +++" << std::endl;
+        std::cout << "--- [FRAME INIT DEBUG] Initializing frame " << index_frame << " with " << const_frame.size() << " input points. ---" << std::endl;
 #endif
 
         // Initialize point cloud
@@ -1316,7 +1311,7 @@ namespace  stateestimate{
             }
         }
         if (all_points_finite) {
-            std::cout << "+++ [FRAME INIT DEBUG] All " << frame.size() << " deskewed points are finite. +++" << std::endl;
+            std::cout << "--- [FRAME INIT DEBUG] All " << frame.size() << " deskewed points are finite. ---" << std::endl;
         }
 #endif
 
@@ -1344,7 +1339,7 @@ namespace  stateestimate{
     
 #ifdef DEBUG
         // [DEBUG] Announce the start of the function and its parameters
-        std::cout << "+++ [MAP DEBUG] Starting updateMap +++" << std::endl;
+        std::cout << "--- [MAP DEBUG] Starting updateMap ---" << std::endl;
         std::cout << "[MAP DEBUG] Current frame index: " << index_frame << ", Updating with data from frame: " << update_frame << std::endl;
 #endif
 
@@ -1515,7 +1510,7 @@ namespace  stateestimate{
 #ifdef DEBUG
         std::cout << "[MAP DEBUG] Removing points farther than " << kMaxDistance << "m from " << location.transpose() << std::endl;
         std::cout << "[MAP DEBUG] Map size after outlier point removal " << map_.size() << " points." << std::endl;
-        std::cout << "+++ [MAP DEBUG] Finished updateMap +++" << std::endl;
+        std::cout << "--- [MAP DEBUG] Finished updateMap ---" << std::endl;
 #endif
 
     }
@@ -1537,7 +1532,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [ADDED DEBUG] Check if we have any IMU data to begin with
-        std::cout << "+++ [GRAVITY DEBUG] Received " << imu_data_vec.size() << " IMU data points for initialization. +++" << std::endl;
+        std::cout << "--- [GRAVITY DEBUG] Received " << imu_data_vec.size() << " IMU data points for initialization. ---" << std::endl;
         if (imu_data_vec.empty()) {
             std::cout << "[GRAVITY DEBUG] CRITICAL: No IMU data provided, cannot initialize gravity. Returning zero vector." << std::endl;
             return Eigen::Matrix<double, 6, 1>::Zero();
@@ -1629,9 +1624,9 @@ namespace  stateestimate{
         std::cout << "[DEBUG GRAVITY INIT] T_mi_var:\n"  << T_mi_var->value().vec() << std::endl;
         // [ADDED DEBUG] Check if the result of the optimization is valid
         if (!T_mi_var->value().vec().allFinite()) {
-            std::cout << "+++ [GRAVITY DEBUG] CRITICAL: Solver produced a non-finite (NaN or inf) result! +++ " << std::endl;
+            std::cout << "--- [GRAVITY DEBUG] CRITICAL: Solver produced a non-finite (NaN or inf) result! ---" << std::endl;
         } else {
-            std::cout << "+++ [GRAVITY DEBUG] Solver finished, result is finite. +++ " << std::endl;
+            std::cout << "--- [GRAVITY DEBUG] Solver finished, result is finite. ---" << std::endl;
         }
 #endif
         
