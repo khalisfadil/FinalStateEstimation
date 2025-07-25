@@ -1188,7 +1188,7 @@ namespace  stateestimate{
         std::cout << "[MOTION DEBUG] Frame 1: Copying pose from end of Frame 0." << std::endl;
         std::cout << "[MOTION DEBUG] Frame 1: Initial Pose (Rotation):\n" << trajectory_[index_frame].begin_R << std::endl;
         std::cout << "[MOTION DEBUG] Frame 1: Initial Pose (Translation): " << trajectory_[index_frame].begin_t.transpose() << std::endl;
-        if (!T_ms.allFinite()) {
+        if (!begin_R.allFinite() || !end_R.allFinite() || !begin_t.allFinite() || !end_t.allFinite()) {
             std::cout << "+++ [MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)! +++" << std::endl;
         } else {
             std::cout << "+++ [MOTION DEBUG] Initial pose T_ms is finite. +++" << std::endl;
@@ -1217,7 +1217,7 @@ namespace  stateestimate{
             std::cout << "[MOTION DEBUG] Frame " << index_frame << ": Extrapolating motion." << std::endl;
             std::cout << "[MOTION DEBUG] Relative Motion (t_rel): " << t_rel.transpose() << std::endl;
             std::cout << "[MOTION DEBUG] Extrapolated End Pose (Translation): " << trajectory_[index_frame].end_t.transpose() << std::endl;
-            if (!T_ms.allFinite()) {
+            if (!begin_R.allFinite() || !end_R.allFinite() || !begin_t.allFinite() || !end_t.allFinite()) {
                 std::cout << "+++ [MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)! +++" << std::endl;
             } else {
                 std::cout << "+++ [MOTION DEBUG] Initial pose T_ms is finite. +++" << std::endl;
