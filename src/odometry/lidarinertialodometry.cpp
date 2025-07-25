@@ -828,6 +828,9 @@ namespace  stateestimate{
         initializeMotion(index_frame);                                                  //####!!! 2 // estimate the motion based on prev and prev*prev frame
 
 #ifdef DEBUG
+        if (index_frame == 0) {
+            std::cout << "[REG DEBUG] Frame 0 Initial Pose (T_ms):\n" << trajectory_[index_frame].end_R << "\n" << trajectory_[index_frame].end_t.transpose() << std::endl;
+        }
         // [DEBUG] Check the initial motion prediction
         if (!trajectory_[index_frame].begin_R.allFinite() || !trajectory_[index_frame].end_R.allFinite()) {
             std::cout << "[REG DEBUG] CRITICAL: Non-finite rotation after initializeMotion!" << std::endl;
@@ -936,10 +939,20 @@ namespace  stateestimate{
             trajectory_vars_.emplace_back(end_slam_time, std::move(end_T_rm_var), std::move(end_w_mr_inr_var),
                                         std::move(end_dw_mr_inr_var), std::move(end_imu_biases), std::move(end_T_mi_var));
 
+#ifdef DEBUG
+            std::cout << "[REG DEBUG] Frame 0: Created " << trajectory_vars_.size() << " initial state variables." << std::endl;
+            std::cout << "[REG DEBUG] Frame 0 timestamps: begin=" << std::fixed << begin_time << ", end=" << end_time << std::endl;
+#endif
+
             // Step 5d: Align gravity using IMU data
             // Ensure proper orientation by aligning with gravity vector
 
             Eigen::Matrix<double, 6, 1> xi_mi = initialize_gravity(const_frame.imu_data_vec);   //####!!! 6
+
+#ifdef DEBUG
+            std::cout << "[REG DEBUG] Frame 0: Gravity alignment vector (xi_mi): " << xi_mi.transpose() << std::endl;
+#endif
+
             begin_T_mi_var->update(xi_mi);
             end_T_mi_var->update(xi_mi);
 
@@ -976,6 +989,7 @@ namespace  stateestimate{
             std::cout << "[REG DEBUG] Updating map for frame 0." << std::endl;
 #endif
             updateMap(index_frame, index_frame);                                        //####!!! 7
+
         } else if ((index_frame - options_.delay_adding_points) > 0) {
 #ifdef DEBUG
             std::cout << "[REG DEBUG] Updating map using frame " << index_frame - options_.delay_adding_points << "." << std::endl;
@@ -1046,7 +1060,7 @@ namespace  stateestimate{
             for (size_t i = 0; i < timer.size(); i++) {
                 std::cout << "Elapsed " << timer[i].first << *(timer[i].second) << std::endl;
             }
-            std::cout << "+++ [REG DEBUG] Finished RegisterFrame for index " << index_frame << " +++" << std::endl;
+            std::cout << "+++ [REG DEBUG] Finished RegisterFrame for index " << index_frame << " +++\n" << std::endl;
 #endif
         return summary;
     }
@@ -1118,6 +1132,11 @@ namespace  stateestimate{
 
     void lidarinertialodom::initializeMotion(int index_frame) {// the first frame should be initialized with Tmr
 
+#ifdef DEBUG
+        // [ADDED DEBUG] Announce entry into the function
+        std::cout << "+++ [MOTION DEBUG] Initializing motion for frame " << index_frame << ". +++" << std::endl;
+#endif
+
         if (index_frame == 0) { //MAIN ALLERT as T_sr is identity. T_ms is exactly same as T_mr
             // --- For the very first frame, use the ground truth initial pose ---
 
@@ -1141,6 +1160,16 @@ namespace  stateestimate{
             // 4. Calculate the initial sensor pose in the map: T_ms = T_mr * T_rs.
             const Eigen::Matrix4d T_ms = T_mr * T_rs;
 
+#ifdef DEBUG
+            // [ADDED DEBUG] Print the initial transformations for Frame 0
+            std::cout << "[MOTION DEBUG] Frame 0: Using initial pose from options." << std::endl;
+            std::cout << "[MOTION DEBUG] Frame 0: Initial Sensor Pose (T_ms):\n" << T_ms << std::endl;
+            if (!T_ms.allFinite()) {
+                std::cout << "+++ [MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)! +++" << std::endl;
+            } else {
+                std::cout << "+++ [MOTION DEBUG] Initial pose T_ms is finite. +++" << std::endl;
+            }
+#endif
             // 5. Set the trajectory's initial pose.
             trajectory_[index_frame].begin_R = T_ms.block<3, 3>(0, 0);
             trajectory_[index_frame].begin_t = T_ms.block<3, 1>(0, 3);
@@ -1153,6 +1182,18 @@ namespace  stateestimate{
             trajectory_[index_frame].begin_t = trajectory_[index_frame - 1].end_t;
             trajectory_[index_frame].end_R = trajectory_[index_frame - 1].end_R;
             trajectory_[index_frame].end_t = trajectory_[index_frame - 1].end_t;
+
+#ifdef DEBUG
+        // [ADDED DEBUG] Confirm the pose was copied for Frame 1
+        std::cout << "[MOTION DEBUG] Frame 1: Copying pose from end of Frame 0." << std::endl;
+        std::cout << "[MOTION DEBUG] Frame 1: Initial Pose (Rotation):\n" << trajectory_[index_frame].begin_R << std::endl;
+        std::cout << "[MOTION DEBUG] Frame 1: Initial Pose (Translation): " << trajectory_[index_frame].begin_t.transpose() << std::endl;
+        if (!T_ms.allFinite()) {
+            std::cout << "+++ [MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)! +++" << std::endl;
+        } else {
+            std::cout << "+++ [MOTION DEBUG] Initial pose T_ms is finite. +++" << std::endl;
+        }
+#endif
         
         } else { 
             // For all subsequent frames, extrapolate motion from the previous two.
@@ -1170,6 +1211,18 @@ namespace  stateestimate{
             // Set the begin pose to the previous frame's end pose
             trajectory_[index_frame].begin_R = prev.end_R;
             trajectory_[index_frame].begin_t = prev.end_t;
+
+#ifdef DEBUG
+            // [ADDED DEBUG] Show the extrapolated motion
+            std::cout << "[MOTION DEBUG] Frame " << index_frame << ": Extrapolating motion." << std::endl;
+            std::cout << "[MOTION DEBUG] Relative Motion (t_rel): " << t_rel.transpose() << std::endl;
+            std::cout << "[MOTION DEBUG] Extrapolated End Pose (Translation): " << trajectory_[index_frame].end_t.transpose() << std::endl;
+            if (!T_ms.allFinite()) {
+                std::cout << "+++ [MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)! +++" << std::endl;
+            } else {
+                std::cout << "+++ [MOTION DEBUG] Initial pose T_ms is finite. +++" << std::endl;
+            }
+#endif
         }
     }
 
@@ -1188,6 +1241,11 @@ namespace  stateestimate{
 
     std::vector<Point3D> lidarinertialodom::initializeFrame(int index_frame, const std::vector<Point3D> &const_frame) {
 
+#ifdef DEBUG
+        // [ADDED DEBUG] Announce entry and check input size
+        std::cout << "+++ [FRAME INIT DEBUG] Initializing frame " << index_frame << " with " << const_frame.size() << " input points. +++" << std::endl;
+#endif
+
         // Initialize point cloud
         std::vector<Point3D> frame = const_frame; // Copy necessary due to const input
 
@@ -1197,12 +1255,25 @@ namespace  stateestimate{
         // Subsample
         sub_sample_frame(frame, sample_size, options_.sequential_threshold);
 
+#ifdef DEBUG
+        // [ADDED DEBUG] Show size after subsampling
+        std::cout << "[FRAME INIT DEBUG] Frame size after subsampling: " << frame.size() << " points." << std::endl;
+#endif
+
         // Shuffle points to avoid bias
         std::mt19937_64 g(42); // Fixed seed for reproducibility
         std::shuffle(frame.begin(), frame.end(), g);
 
         // Validate poses
         const auto& traj = trajectory_[index_frame]; //contain R_ms and t_ms
+
+#ifdef DEBUG
+        // [ADDED DEBUG] Check input poses for validity before using them
+        if (!traj.begin_R.allFinite() || !traj.end_R.allFinite() || !traj.begin_t.allFinite() || !traj.end_t.allFinite()) {
+            std::cout << "[FRAME INIT DEBUG] CRITICAL: Input trajectory poses for deskewing are non-finite!" << std::endl;
+        }
+        std::cout << "[FRAME INIT DEBUG] Deskewing with begin_t: " << traj.begin_t.transpose() << " and end_t: " << traj.end_t.transpose() << std::endl;
+#endif
 
         auto q_begin = Eigen::Quaterniond(traj.begin_R);
         auto q_end = Eigen::Quaterniond(traj.end_R);
@@ -1233,6 +1304,22 @@ namespace  stateestimate{
                 }
             });
         }
+
+#ifdef DEBUG
+        // [ADDED DEBUG] Final check to ensure all output points are valid
+        bool all_points_finite = true;
+        for (const auto& point : frame) {
+            if (!point.pt.allFinite()) {
+                std::cout << "+++ [FRAME INIT DEBUG] CRITICAL: A deskewed point is non-finite (NaN or inf)! +++" << std::endl;
+                all_points_finite = false;
+                break;
+            }
+        }
+        if (all_points_finite) {
+            std::cout << "+++ [FRAME INIT DEBUG] All " << frame.size() << " deskewed points are finite. +++" << std::endl;
+        }
+#endif
+
         return frame;
     }
 
@@ -1257,7 +1344,7 @@ namespace  stateestimate{
     
 #ifdef DEBUG
         // [DEBUG] Announce the start of the function and its parameters
-        std::cout << "\n--- [MAP DEBUG] Starting updateMap ---" << std::endl;
+        std::cout << "+++ [MAP DEBUG] Starting updateMap +++" << std::endl;
         std::cout << "[MAP DEBUG] Current frame index: " << index_frame << ", Updating with data from frame: " << update_frame << std::endl;
 #endif
 
@@ -1301,11 +1388,11 @@ namespace  stateestimate{
         }
 
 #ifdef DEBUG
-        // std::cout << "[MAP DEBUG] Building interpolation trajectory from state index " << start_idx 
-        //         << " to " << (start_idx + num_states - 1) << " (" << num_states << " states)." << std::endl;
-        // std::cout << "[MAP DEBUG] Trajectory covers time range (inclusive): " << std::fixed << std::setprecision(12) 
-        //         << begin_slam_time.seconds() << " - " << end_slam_time.seconds() 
-        //         << ", with num states: " << num_states << std::endl;
+        std::cout << "[MAP DEBUG] Building interpolation trajectory from state index " << start_idx 
+                << " to " << (start_idx + num_states - 1) << " (" << num_states << " states)." << std::endl;
+        std::cout << "[MAP DEBUG] Trajectory covers time range (inclusive): " << std::fixed << std::setprecision(12) 
+                << begin_slam_time.seconds() << " - " << end_slam_time.seconds() 
+                << ", with num states: " << num_states << std::endl;
 #endif
 
         // Collect unique timestamps
@@ -1427,8 +1514,8 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         std::cout << "[MAP DEBUG] Removing points farther than " << kMaxDistance << "m from " << location.transpose() << std::endl;
-        std::cout << "[MAP DEBUG] Map size after outlier point removal" << map_.size() << " points." << std::endl;
-        std::cout << "--- [MAP DEBUG] Finished updateMap ---\n" << std::endl;
+        std::cout << "[MAP DEBUG] Map size after outlier point removal " << map_.size() << " points." << std::endl;
+        std::cout << "+++ [MAP DEBUG] Finished updateMap +++" << std::endl;
 #endif
 
     }
@@ -1447,6 +1534,15 @@ namespace  stateestimate{
     enabling gravity-aligned initialization for odometry.*/
 
     Eigen::Matrix<double, 6, 1> lidarinertialodom::initialize_gravity(const std::vector<finalicp::IMUData> &imu_data_vec) {
+
+#ifdef DEBUG
+        // [ADDED DEBUG] Check if we have any IMU data to begin with
+        std::cout << "+++ [GRAVITY DEBUG] Received " << imu_data_vec.size() << " IMU data points for initialization. +++" << std::endl;
+        if (imu_data_vec.empty()) {
+            std::cout << "[GRAVITY DEBUG] CRITICAL: No IMU data provided, cannot initialize gravity. Returning zero vector." << std::endl;
+            return Eigen::Matrix<double, 6, 1>::Zero();
+        }
+#endif
 
         // Initialize state variables
         const auto T_rm_init = finalicp::se3::SE3StateVar::MakeShared(math::se3::Transformation(options_.T_rm_init));
@@ -1495,6 +1591,11 @@ namespace  stateestimate{
             cost_terms.assign(concurrent_cost_terms.begin(), concurrent_cost_terms.end());
         }
 
+#ifdef DEBUG
+        // [ADDED DEBUG] Confirm that cost terms were actually created
+        std::cout << "[GRAVITY DEBUG] Created " << cost_terms.size() << " acceleration cost terms." << std::endl;
+#endif
+
         {
             // Add prior cost term for T_mi
             Eigen::Matrix<double, 6, 6> init_T_mi_cov = options_.T_mi_init_cov.asDiagonal();
@@ -1522,10 +1623,16 @@ namespace  stateestimate{
         solver.optimize();
 
 #ifdef DEBUG
-        std::cout<< "[DEBUG GRAVITY INIT] T_mi:" << std::endl 
-             << T_mi_var->value().matrix() << std::endl;
-        std::cout << "[DEBUG GRAVITY INIT] T_mi_var: "  << std::endl 
-             << T_mi_var->value().vec() << std::endl;
+        
+
+        std::cout<< "[DEBUG GRAVITY INIT] T_mi:\n" << T_mi_var->value().matrix() << std::endl;
+        std::cout << "[DEBUG GRAVITY INIT] T_mi_var:\n"  << T_mi_var->value().vec() << std::endl;
+        // [ADDED DEBUG] Check if the result of the optimization is valid
+        if (!T_mi_var->value().vec().allFinite()) {
+            std::cout << "+++ [GRAVITY DEBUG] CRITICAL: Solver produced a non-finite (NaN or inf) result! +++ " << std::endl;
+        } else {
+            std::cout << "+++ [GRAVITY DEBUG] Solver finished, result is finite. +++ " << std::endl;
+        }
 #endif
         
         return T_mi_var->value().vec();
@@ -1996,6 +2103,11 @@ namespace  stateestimate{
         // Remove states older than delay_adding_points frames ago
         if (index_frame > options_.delay_adding_points && options_.delay_adding_points >= 0) {
 
+#ifdef DEBUG
+            std::cout << "\n--- [MARG DEBUG | Frame " << index_frame << "] ---" << std::endl;
+            std::cout << "[MARG DEBUG] Condition (index_frame > delay_adding_points) met. Entering marginalization." << std::endl;
+#endif
+
             // Collect state variables to marginalize (from to_marginalize_ up to marg_time)
             std::vector<finalicp::StateVarBase::Ptr> marg_vars;
             size_t num_states = 0;
@@ -2011,6 +2123,13 @@ namespace  stateestimate{
                 if (VAR.time <= marg_slam_time) {
                     // Update end marginalization time
                     end_marg_time = VAR.time.seconds();
+
+#ifdef DEBUG
+                        // Check if the variables are valid *before* marginalizing them
+                        if(!VAR.T_rm->value().matrix().allFinite()) {
+                           std::cout << "[MARG DEBUG] CRITICAL: VAR.T_rm at index " << i << " is NaN before marginalization!" << std::endl;
+                        }
+#endif
 
                     // Add state variables to marginalize
                     marg_vars.emplace_back(VAR.T_rm);
@@ -2032,10 +2151,17 @@ namespace  stateestimate{
 
             // Marginalize the collected variables if any
             if (!marg_vars.empty()) {
+#ifdef DEBUG
+                std::cout << "[MARG DEBUG] Collected " << num_states << " states to marginalize." << std::endl;
+                std::cout << "[MARG DEBUG] Calling sliding_window_filter_->marginalizeVariable()" << std::endl;
+#endif
+
                 sliding_window_filter_->marginalizeVariable(marg_vars);
 #ifdef DEBUG
                 std::cout << std::fixed << std::setprecision(12) 
                 << "[ICP DEBUG] Marginalizing time: " << begin_marg_time - end_marg_time << ", with num states: " << num_states << std::endl;
+                std::cout << "[MARG DEBUG] Finished marginalization call." << std::endl;
+                std::cout << "--- [END MARG DEBUG] ---" << std::endl;
 #endif
             }
 
@@ -2569,6 +2695,7 @@ namespace  stateestimate{
              std::cout << "[ICP DEBUG] Keypoint coordinates are finite." << std::endl;
         }
 #endif
+// seems it stuck until here
 
         ///################################################################################
 
@@ -2614,21 +2741,21 @@ namespace  stateestimate{
                         Eigen::Vector3d closest_pt = vector_neighbors[0];
                         Eigen::Vector3d closest_normal = weight * neighborhood.normal;
                         Eigen::Matrix3d W = (closest_normal * closest_normal.transpose() + 1e-5 * Eigen::Matrix3d::Identity());
-                        const auto noise_model = StaticNoiseModel::MakeShared(W, NoiseType::INFORMATION);
+                        const auto noise_model = finalicp::StaticNoiseModel<3>::MakeShared(W, NoiseType::INFORMATION);
                         const auto &T_mr_intp_eval = T_mr_intp_eval_map.at(keypoint.timestamp);
                         const auto error_func = p2p::p2pError(T_mr_intp_eval, closest_pt, keypoint.raw_pt);
                         error_func->setTime(Time(keypoint.timestamp));
 
                         const auto loss_func = [this]() -> BaseLossFunc::Ptr {
                         switch (options_.p2p_loss_func) {
-                            case STEAM_LOSS_FUNC::L2: return L2LossFunc::MakeShared();
-                            case STEAM_LOSS_FUNC::DCS: return DcsLossFunc::MakeShared(options_.p2p_loss_sigma);
-                            case STEAM_LOSS_FUNC::CAUCHY: return CauchyLossFunc::MakeShared(options_.p2p_loss_sigma);
-                            case STEAM_LOSS_FUNC::GM: return GemanMcClureLossFunc::MakeShared(options_.p2p_loss_sigma);
+                            case lidarinertialodom::LOSS_FUNC::L2: return L2LossFunc::MakeShared();
+                            case lidarinertialodom::LOSS_FUNC::DCS: return DcsLossFunc::MakeShared(options_.p2p_loss_sigma);
+                            case lidarinertialodom::LOSS_FUNC::CAUCHY: return CauchyLossFunc::MakeShared(options_.p2p_loss_sigma);
+                            case lidarinertialodom::LOSS_FUNC::GM: return GemanMcClureLossFunc::MakeShared(options_.p2p_loss_sigma);
                             default: return nullptr;
                         }
                         }();
-                        meas_cost_terms.emplace_back(WeightedLeastSqCostTerm::MakeShared(error_func, noise_model, loss_func));
+                        meas_cost_terms.emplace_back(finalicp::WeightedLeastSqCostTerm<3>::MakeShared(error_func, noise_model, loss_func));
 #endif
                     }
                 }
@@ -2681,21 +2808,21 @@ namespace  stateestimate{
                                 Eigen::Vector3d closest_pt = vector_neighbors[0];
                                 Eigen::Vector3d closest_normal = weight * neighborhood.normal;
                                 Eigen::Matrix3d W = (closest_normal * closest_normal.transpose() + 1e-5 * Eigen::Matrix3d::Identity());
-                                const auto noise_model = StaticNoiseModel::MakeShared(W, NoiseType::INFORMATION);
+                                const auto noise_model = finalicp::StaticNoiseModel<3>::MakeShared(W, NoiseType::INFORMATION);
                                 const auto &T_mr_intp_eval = T_mr_intp_eval_map.at(keypoint.timestamp);
                                 const auto error_func = p2p::p2pError(T_mr_intp_eval, closest_pt, keypoint.raw_pt);
                                 error_func->setTime(Time(keypoint.timestamp));
 
                                 const auto loss_func = [this]() -> BaseLossFunc::Ptr {
                                 switch (options_.p2p_loss_func) {
-                                    case STEAM_LOSS_FUNC::L2: return L2LossFunc::MakeShared();
-                                    case STEAM_LOSS_FUNC::DCS: return DcsLossFunc::MakeShared(options_.p2p_loss_sigma);
-                                    case STEAM_LOSS_FUNC::CAUCHY: return CauchyLossFunc::MakeShared(options_.p2p_loss_sigma);
-                                    case STEAM_LOSS_FUNC::GM: return GemanMcClureLossFunc::MakeShared(options_.p2p_loss_sigma);
+                                    case lidarinertialodom::LOSS_FUNC::L2: return L2LossFunc::MakeShared();
+                                    case lidarinertialodom::LOSS_FUNC::DCS: return DcsLossFunc::MakeShared(options_.p2p_loss_sigma);
+                                    case lidarinertialodom::LOSS_FUNC:::CAUCHY: return CauchyLossFunc::MakeShared(options_.p2p_loss_sigma);
+                                    case lidarinertialodom::LOSS_FUNC::GM: return GemanMcClureLossFunc::MakeShared(options_.p2p_loss_sigma);
                                     default: return nullptr;
                                 }
                                 }();
-                                res.meas_cost_terms_local.emplace_back(WeightedLeastSqCostTerm::MakeShared(error_func, noise_model, loss_func));
+                                res.meas_cost_terms_local.emplace_back(finalicp::WeightedLeastSqCostTerm<3>::MakeShared(error_func, noise_model, loss_func));
 #endif
                             }
                         }

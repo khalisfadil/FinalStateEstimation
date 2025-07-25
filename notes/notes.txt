@@ -114,3 +114,8 @@ Donnerstag, 24. Juli 2025 10:14
         - initialize at lidar intertial odom and first called at icp line ~1966
     - Define the marginalization time based on delay_adding_points
         - const double marg_time = trajectory_.at(index_frame - options_.delay_adding_points - 1).end_timestamp;
+    - I don't want to be so exited, but today, I know the problem due to marginalization. as I increase the delay point the program does not crash. 
+    - I also don't want to give high hope but the rmse value is very low.
+    - thats for today alhamdulillah!
+    - there is an ill condition
+--------------------------------------------------------------------------------------------------------------------------
