@@ -125,3 +125,4 @@ Freitag, 25. Juli 2025 12:12
     - the problem come from the optimization process.gauss newton GaussNewtonSolverNVA
     - I have been advice to isolate my cost term which maybe wrong.
     - testing remove the IMU factor to check convergence
+    - removing the IMU factor create back the ill condition, thus I revoke changes and the icp iterate until iteration 9 before failling.

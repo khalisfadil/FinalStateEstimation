@@ -2682,20 +2682,19 @@ namespace  stateestimate{
 #endif
 
 #ifdef DEBUG
-        // [DEBUG] Check if keypoint coordinates are finite before association
-        std::cout << "[ICP DEBUG] Keypoint size: " << keypoints.size() << std::endl;
-        bool keypoints_are_finite = true;
-        for(const auto& kp : keypoints) {
-            if (!kp.pt.allFinite()) {
-                keypoints_are_finite = false;
-                break;
+            // [DEBUG] Check if keypoint coordinates are finite before association
+            std::cout << "[ICP DEBUG] Keypoint size for association: " << keypoints.size() << std::endl;
+            bool keypoints_are_finite = true;
+            for (size_t i = 0; i < keypoints.size(); ++i) {
+                if (!keypoints[i].pt.allFinite()) {
+                    std::cout << "[ICP DEBUG] CRITICAL: Keypoint " << i << " coordinate is NOT finite before association!" << std::endl;
+                    keypoints_are_finite = false;
+                    break;
+                }
             }
-        }
-        if (!keypoints_are_finite) {
-             std::cout << "[ICP DEBUG] CRITICAL: Keypoint coordinates are NOT finite before association!" << std::endl;
-        } else {
-             std::cout << "[ICP DEBUG] Keypoint coordinates are finite." << std::endl;
-        }
+            if (keypoints_are_finite) {
+                std::cout << "[ICP DEBUG] All keypoint coordinates are finite before association." << std::endl;
+            }
 #endif
         ///################################################################################
 
@@ -2901,23 +2900,44 @@ namespace  stateestimate{
             // Uses Gauss-Newton solver to refine the trajectory
 #ifdef DEBUG
             timer[2].second->start(); // Start optimization timer
+            std::cout << "[ICP DEBUG] Calling solver.optimize()... Number of variables: " << problem->getStateVector()->getNumberOfStates() << ", Number of cost terms: " << problem->getNumberOfCostTerms() << std::endl;
 #endif
+            
             finalicp::GaussNewtonSolverNVA::Params params;
             params.verbose = options_.verbose;
             params.max_iterations = static_cast<unsigned int>(options_.max_iterations);
             params.line_search = (iter >= 2 && options_.use_line_search); // Enable line search after 2 iterations if configured
             params.reuse_previous_pattern = !swf_inside_icp; // Disable pattern reuse for sliding window filter
             finalicp::GaussNewtonSolverNVA solver(*problem, params);
-            solver.optimize(); // Solve the optimization problem
+
+            // --- WRAP SOLVER CALL IN A TRY-CATCH BLOCK ---
+            try {
+                solver.optimize();
+            } catch (const finalicp::decomp_failure& e) {
+#ifdef DEBUG
+                std::cerr << "[ICP DEBUG] CATASTROPHIC SOLVER FAILURE: " << e.what() << std::endl;
+                std::cerr << "[ICP DEBUG] This usually means the Hessian matrix is not positive-definite, likely due to an ill-conditioned problem (e.g., bad geometry, insufficient constraints/priors)." << std::endl;
+#endif
+                icp_success = false;
+                break;
+            } catch (const std::exception& e) {
+#ifdef DEBUG
+                std::cerr << "[ICP DEBUG] AN UNEXPECTED EXCEPTION OCCURRED DURING SOLVER::OPTIMIZE: " << e.what() << std::endl;
+#endif
+                icp_success = false;
+                break;
+            }
 
 #ifdef DEBUG
             timer[2].second->stop(); // Stop optimization timer
+            std::cout << "[ICP DEBUG] Solver finished." << std::endl;
 #endif
 
             // Step 48: Update the trajectory estimate and check convergence
             // Computes differences in pose, velocity, and acceleration to determine if converged
 #ifdef DEBUG
             timer[3].second->start(); // Start alignment timer
+            std::cout << "[ICP DEBUG] --- Updating State & Checking Convergence ---" << std::endl;
 #endif
 
 #ifdef DEBUG
@@ -2996,12 +3016,13 @@ namespace  stateestimate{
                 }
                 current_estimate.mid_b = trajectory_vars_[i].imu_biases->value();
             }
+            // --- [ADD DEBUG CHECKS AFTER CALCULATING DIFFS] ---
 #ifdef DEBUG
-            // [DEBUG] Check convergence diffs for NaN values
-            if (!std::isfinite(diff_rot) || !std::isfinite(diff_trans) || !std::isfinite(diff_vel)) {
-                std::cout << "[ICP DEBUG] CRITICAL: Non-finite difference after optimization!" << std::endl;
+            if (!std::isfinite(diff_rot) || !std::isfinite(diff_trans) || !std::isfinite(diff_vel) || !std::isfinite(diff_acc)) {
+                std::cout << "[ICP DEBUG] CRITICAL: Non-finite difference detected after optimization! The state is likely corrupted with NaNs." << std::endl;
             }
-            std::cout << "[ICP DEBUG] diff_rot: " << diff_rot << " diff_trans: " << diff_trans << " diff_vel: " << diff_vel << " diff_acc: " << diff_acc << std::endl;
+            std::cout << "[ICP DEBUG] State Change   | d_rot: " << diff_rot << ", d_trans: " << diff_trans << ", d_vel: " << diff_vel << ", d_acc: " << diff_acc << std::endl;
+            std::cout << "[ICP DEBUG] End Pose (t)   | " << current_estimate.end_t.transpose() << std::endl;
 #endif
 
 
@@ -3024,9 +3045,7 @@ namespace  stateestimate{
             // Re-transform keypoints for the next iteration
 #ifdef DEBUG
             timer[0].second->start(); // Start update transform timer
-#endif
-#ifdef DEBUG
-        std::cout << "[ICP DEBUG] Performing initial keypoint transformation after ICP loop." << std::endl;
+            std::cout << "[ICP DEBUG] Performing initial keypoint transformation after ICP loop." << std::endl;
 #endif
             transform_keypoints(); // Updates keypoints.pt using the latest trajectory
 #ifdef DEBUG
