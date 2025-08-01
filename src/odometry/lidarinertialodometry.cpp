@@ -2907,7 +2907,7 @@ namespace  stateestimate{
             params.verbose = options_.verbose;
             params.max_iterations = static_cast<unsigned int>(options_.max_iterations);
             params.line_search = (iter >= 2 && options_.use_line_search); // Enable line search after 2 iterations if configured
-            params.reuse_previous_pattern = !swf_inside_icp; // Disable pattern reuse for sliding window filter
+            if (swf_inside_icp) {params.reuse_previous_pattern = false;}
             finalicp::GaussNewtonSolverNVA solver(*problem, params);
 
             // --- WRAP SOLVER CALL IN A TRY-CATCH BLOCK ---
@@ -3135,6 +3135,10 @@ namespace  stateestimate{
         current_estimate.mid_w = SLAM_TRAJ->getVelocityInterpolator(curr_mid_slam_time)->value();
         current_estimate.mid_dw = SLAM_TRAJ->getAccelerationInterpolator(curr_mid_slam_time)->value();
         current_estimate.mid_T_mi = trajectory_vars_[prev_trajectory_var_index].T_mi->value().matrix();
+         // ADD THIS LINE
+#ifdef DEBUG
+        std::cout << "[ICP DEBUG] About to construct Covariance object. If crash happens next, this is the cause." << std::endl;
+#endif
         finalicp::Covariance covariance(solver);
         current_estimate.mid_state_cov = SLAM_TRAJ->getCovariance(covariance, trajectory_vars_[prev_trajectory_var_index].time);
 
