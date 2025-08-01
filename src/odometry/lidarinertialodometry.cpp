@@ -749,13 +749,13 @@ namespace  stateestimate{
 
             // Mid pose
             Time mid_slam_time(static_cast<double>(frame.getEvalTime()));
-            const auto mid_T_mr = full_trajectory->getPoseInterpolator(begin_slam_time)->value().inverse().matrix();
+            const auto mid_T_mr = full_trajectory->getPoseInterpolator(mid_slam_time)->value().inverse().matrix();
             const auto mid_T_ms = mid_T_mr * T_sr_inv;
             frame.setMidPose(mid_T_ms);
 
             // End pose
             Time end_slam_time(frame.end_timestamp);
-            const auto end_T_mr = full_trajectory->getPoseInterpolator(begin_slam_time)->value().inverse().matrix();
+            const auto end_T_mr = full_trajectory->getPoseInterpolator(end_slam_time)->value().inverse().matrix();
             const auto end_T_ms = end_T_mr * T_sr_inv;
             frame.end_R = end_T_ms.block<3, 3>(0, 0);
             frame.end_t = end_T_ms.block<3, 1>(0, 3);
@@ -829,7 +829,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         if (index_frame == 0) {
-            std::cout << "[REG DEBUG] Frame 0 Initial Pose (T_ms):\n" << trajectory_[index_frame].end_R << "\n" << trajectory_[index_frame].end_t.transpose() << std::endl;
+            std::cout << "[REG DEBUG] Frame 0 Initial Pose (R_ms):\n" << trajectory_[index_frame].end_R << "\n(t_ms):\n" << trajectory_[index_frame].end_t.transpose() << std::endl;
         }
         // [DEBUG] Check the initial motion prediction
         if (!trajectory_[index_frame].begin_R.allFinite() || !trajectory_[index_frame].end_R.allFinite()) {
@@ -2816,7 +2816,7 @@ namespace  stateestimate{
                                 switch (options_.p2p_loss_func) {
                                     case lidarinertialodom::LOSS_FUNC::L2: return L2LossFunc::MakeShared();
                                     case lidarinertialodom::LOSS_FUNC::DCS: return DcsLossFunc::MakeShared(options_.p2p_loss_sigma);
-                                    case lidarinertialodom::LOSS_FUNC:::CAUCHY: return CauchyLossFunc::MakeShared(options_.p2p_loss_sigma);
+                                    case lidarinertialodom::LOSS_FUNC::CAUCHY: return CauchyLossFunc::MakeShared(options_.p2p_loss_sigma);
                                     case lidarinertialodom::LOSS_FUNC::GM: return GemanMcClureLossFunc::MakeShared(options_.p2p_loss_sigma);
                                     default: return nullptr;
                                 }
