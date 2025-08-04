@@ -2649,21 +2649,24 @@ namespace  stateestimate{
         // [DEBUG] Start of an ICP iteration
         std::cout << "[ICP DEBUG] --- Iteration " << iter << " ---" << std::endl;
 #endif
-            // Initialize optimization problem based on swf_inside_icp
-            const auto problem = [&]() -> finalicp::Problem::Ptr {
-                if (swf_inside_icp) {
-                    // Use SlidingWindowFilter for sliding window optimization
-                    return sliding_window_filter_;
-                    // return std::make_shared<finalicp::SlidingWindowFilter>(*sliding_window_filter_);
-                } else {
-                    // Use OptimizationProblem for full state optimization
-                    auto problem = finalicp::OptimizationProblem::MakeShared(options_.num_threads);
-                    for (const auto& var : SLAM_STATE_VAR) {
-                        problem->addStateVariable(var);
-                    }
-                    return problem;
-                }
-            }();
+            // // Initialize optimization problem based on swf_inside_icp
+            // const auto problem = [&]() -> finalicp::Problem::Ptr {
+            //     if (swf_inside_icp) {
+            //         // Use SlidingWindowFilter for sliding window optimization
+            //         return sliding_window_filter_;
+            //         // return std::make_shared<finalicp::SlidingWindowFilter>(*sliding_window_filter_);
+            //     } else {
+            //         // Use OptimizationProblem for full state optimization
+            //         auto problem = finalicp::OptimizationProblem::MakeShared(options_.num_threads);
+            //         for (const auto& var : SLAM_STATE_VAR) {
+            //             problem->addStateVariable(var);
+            //         }
+            //         return problem;
+            //     }
+            // }();
+
+            // Always use the single, persistent SlidingWindowFilter to manage the state.
+            const auto problem = sliding_window_filter_;
 
             // Add prior cost terms to the problem
             SLAM_TRAJ->addPriorCostTerms(*problem);
