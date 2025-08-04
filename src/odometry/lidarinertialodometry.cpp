@@ -3137,7 +3137,7 @@ namespace  stateestimate{
         current_estimate.mid_T_mi = trajectory_vars_[prev_trajectory_var_index].T_mi->value().matrix();
          // ADD THIS LINE
 #ifdef DEBUG
-        std::cout << "[ICP DEBUG] About to construct Covariance object. If crash happens next, this is the cause." << std::endl;
+        std::cout << "[ICP DEBUG] About to construct Covariance object." << std::endl;
 #endif
         finalicp::Covariance covariance(solver);
         current_estimate.mid_state_cov = SLAM_TRAJ->getCovariance(covariance, trajectory_vars_[prev_trajectory_var_index].time);
