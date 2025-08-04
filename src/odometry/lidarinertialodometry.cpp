@@ -2634,9 +2634,10 @@ namespace  stateestimate{
         // the sensor's local frame into the world frame based on your initial motion guess.
         // Without this, the first search for neighbors will fail.
 #ifdef DEBUG
-        std::cout << "[ICP DEBUG] Performing initial keypoint transformation before ICP loop." << std::endl;
+        if (index_frame == 1){
+            std::cout << "[ICP DEBUG] Performing initial keypoint transformation before ICP loop." << std::endl;}
 #endif
-        transform_keypoints();
+        if (index_frame == 1){transform_keypoints();}
 
         // ################################################################################
         // Step 43: Start ICP optimization loop ################################################################################
@@ -3027,7 +3028,7 @@ namespace  stateestimate{
 
 
             // Check convergence
-            if ((index_frame > 1) &&
+            if ((index_frame >= 1) &&
                 (diff_rot < options_.threshold_orientation_norm &&
                 diff_trans < options_.threshold_translation_norm &&
                 diff_vel < options_.threshold_translation_norm * 10.0 + options_.threshold_orientation_norm * 10.0 &&
