@@ -2653,7 +2653,8 @@ namespace  stateestimate{
             const auto problem = [&]() -> finalicp::Problem::Ptr {
                 if (swf_inside_icp) {
                     // Use SlidingWindowFilter for sliding window optimization
-                    return std::make_shared<finalicp::SlidingWindowFilter>(*sliding_window_filter_);
+                    return sliding_window_filter_;
+                    // return std::make_shared<finalicp::SlidingWindowFilter>(*sliding_window_filter_);
                 } else {
                     // Use OptimizationProblem for full state optimization
                     auto problem = finalicp::OptimizationProblem::MakeShared(options_.num_threads);
