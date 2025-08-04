@@ -2638,6 +2638,8 @@ namespace  stateestimate{
 #endif
         transform_keypoints();
 
+        // declare a smart pointer
+        std::unique_ptr<finalicp::GaussNewtonSolverNVA> solver_ptr;
         // ################################################################################
         // Step 43: Start ICP optimization loop ################################################################################
         // ################################################################################
@@ -2904,12 +2906,17 @@ namespace  stateestimate{
 #endif
             
             finalicp::GaussNewtonSolverNVA::Params params;
-            params.verbose = options_.verbose;
+            // params.verbose = options_.verbose;
             params.max_iterations = static_cast<unsigned int>(options_.max_iterations);
             params.line_search = (iter >= 2 && options_.use_line_search); // Enable line search after 2 iterations if configured
             if (swf_inside_icp) {params.reuse_previous_pattern = false;}
-            finalicp::GaussNewtonSolverNVA solver(*problem, params);
-            solver.optimize();
+
+            // CORRECTION
+            solver_ptr = std::make_unique<finalicp::GaussNewtonSolverNVA>(*problem, params);
+            solver_ptr->optimize(); // Use the pointer to optimize
+
+            // finalicp::GaussNewtonSolverNVA solver(*problem, params);
+            // solver.optimize();
             // --- WRAP SOLVER CALL IN A TRY-CATCH BLOCK ---
 //             try {
 //                 solver.optimize();
@@ -3099,13 +3106,13 @@ namespace  stateestimate{
                                     std::to_string(sliding_window_filter_->getNumberOfCostTerms()));
         }
 
-        finalicp::GaussNewtonSolverNVA::Params params;
-        params.verbose = options_.verbose;
-        params.max_iterations = static_cast<unsigned int>(options_.max_iterations);
-        finalicp::GaussNewtonSolverNVA solver(*sliding_window_filter_, params);
-        if (!swf_inside_icp) {
-            solver.optimize(); // Optimize the sliding window filter if not done in ICP loop
-        }
+        // finalicp::GaussNewtonSolverNVA::Params params;
+        // params.verbose = options_.verbose;
+        // params.max_iterations = static_cast<unsigned int>(options_.max_iterations);
+        // finalicp::GaussNewtonSolverNVA solver(*sliding_window_filter_, params);
+        // if (!swf_inside_icp) {
+        //     solver.optimize(); // Optimize the sliding window filter if not done in ICP loop
+        // }
 
         // Step 51: Lock T_mi variables (if applicable)
         // Ensures consistent IMU-to-map transformations for future variables
@@ -3135,11 +3142,15 @@ namespace  stateestimate{
         current_estimate.mid_w = SLAM_TRAJ->getVelocityInterpolator(curr_mid_slam_time)->value();
         current_estimate.mid_dw = SLAM_TRAJ->getAccelerationInterpolator(curr_mid_slam_time)->value();
         current_estimate.mid_T_mi = trajectory_vars_[prev_trajectory_var_index].T_mi->value().matrix();
-         // ADD THIS LINE
+
+        // ADD THIS LINE
+        if (!solver_ptr) {
+            throw std::runtime_error("ICP loop finished without a valid solver.");
+        }
 #ifdef DEBUG
         std::cout << "[ICP DEBUG] About to construct Covariance object." << std::endl;
 #endif
-        finalicp::Covariance covariance(solver);
+        finalicp::Covariance covariance(*solver_ptr);
 #ifdef DEBUG
         std::cout << "[ICP DEBUG] About to run getCovariance." << std::endl;
 #endif
