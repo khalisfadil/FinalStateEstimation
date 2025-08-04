@@ -2909,24 +2909,24 @@ namespace  stateestimate{
             params.line_search = (iter >= 2 && options_.use_line_search); // Enable line search after 2 iterations if configured
             if (swf_inside_icp) {params.reuse_previous_pattern = false;}
             finalicp::GaussNewtonSolverNVA solver(*problem, params);
-
+            solver.optimize();
             // --- WRAP SOLVER CALL IN A TRY-CATCH BLOCK ---
-            try {
-                solver.optimize();
-            } catch (const finalicp::decomp_failure& e) {
-#ifdef DEBUG
-                std::cerr << "[ICP DEBUG] CATASTROPHIC SOLVER FAILURE: " << e.what() << std::endl;
-                std::cerr << "[ICP DEBUG] This usually means the Hessian matrix is not positive-definite, likely due to an ill-conditioned problem (e.g., bad geometry, insufficient constraints/priors)." << std::endl;
-#endif
-                icp_success = false;
-                break;
-            } catch (const std::exception& e) {
-#ifdef DEBUG
-                std::cerr << "[ICP DEBUG] AN UNEXPECTED EXCEPTION OCCURRED DURING SOLVER::OPTIMIZE: " << e.what() << std::endl;
-#endif
-                icp_success = false;
-                break;
-            }
+//             try {
+//                 solver.optimize();
+//             } catch (const finalicp::decomp_failure& e) {
+// #ifdef DEBUG
+//                 std::cerr << "[ICP DEBUG] CATASTROPHIC SOLVER FAILURE: " << e.what() << std::endl;
+//                 std::cerr << "[ICP DEBUG] This usually means the Hessian matrix is not positive-definite, likely due to an ill-conditioned problem (e.g., bad geometry, insufficient constraints/priors)." << std::endl;
+// #endif
+//                 icp_success = false;
+//                 break;
+//             } catch (const std::exception& e) {
+// #ifdef DEBUG
+//                 std::cerr << "[ICP DEBUG] AN UNEXPECTED EXCEPTION OCCURRED DURING SOLVER::OPTIMIZE: " << e.what() << std::endl;
+// #endif
+//                 icp_success = false;
+//                 break;
+//             }
 
 #ifdef DEBUG
             timer[2].second->stop(); // Stop optimization timer
