@@ -2622,7 +2622,7 @@ namespace  stateestimate{
 
         // Step 42: Configure sliding window filter usage
         // Determines whether to use SlidingWindowFilter inside ICP loop
-        bool swf_inside_icp = false; // Default for KITTI-raw: false, but true here
+        bool swf_inside_icp = true; // Default for KITTI-raw: false, but true here
         if (index_frame > options_.init_num_frames) {
             swf_inside_icp = true; // Use sliding window filter after initial frames
         }
@@ -2638,35 +2638,29 @@ namespace  stateestimate{
 #endif
         transform_keypoints();
 
-        // declare a smart pointer
-        std::unique_ptr<finalicp::GaussNewtonSolverNVA> solver_ptr;
         // ################################################################################
         // Step 43: Start ICP optimization loop ################################################################################
         // ################################################################################
         // Iterates to refine the trajectory using point-to-plane alignment
-        for (int iter = 0; iter < options_.num_iters_icp; iter++) {
+        for (int iter(0); iter < options_.num_iters_icp; iter++) {
 #ifdef DEBUG
         // [DEBUG] Start of an ICP iteration
         std::cout << "[ICP DEBUG] --- Iteration " << iter << " ---" << std::endl;
 #endif
-            // // Initialize optimization problem based on swf_inside_icp
-            // const auto problem = [&]() -> finalicp::Problem::Ptr {
-            //     if (swf_inside_icp) {
-            //         // Use SlidingWindowFilter for sliding window optimization
-            //         return sliding_window_filter_;
-            //         // return std::make_shared<finalicp::SlidingWindowFilter>(*sliding_window_filter_);
-            //     } else {
-            //         // Use OptimizationProblem for full state optimization
-            //         auto problem = finalicp::OptimizationProblem::MakeShared(options_.num_threads);
-            //         for (const auto& var : SLAM_STATE_VAR) {
-            //             problem->addStateVariable(var);
-            //         }
-            //         return problem;
-            //     }
-            // }();
-
-            // Always use the single, persistent SlidingWindowFilter to manage the state.
-            const auto problem = sliding_window_filter_;
+            // Initialize optimization problem based on swf_inside_icp
+            const auto problem = [&]() -> finalicp::Problem::Ptr {
+                if (swf_inside_icp) {
+                    // Use SlidingWindowFilter for sliding window optimization
+                    return std::make_shared<finalicp::SlidingWindowFilter>(*sliding_window_filter_);
+                } else {
+                    // Use OptimizationProblem for full state optimization
+                    auto problem = finalicp::OptimizationProblem::MakeShared(options_.num_threads);
+                    for (const auto& var : SLAM_STATE_VAR) {
+                        problem->addStateVariable(var);
+                    }
+                    return problem;
+                }
+            }();
 
             // Add prior cost terms to the problem
             SLAM_TRAJ->addPriorCostTerms(*problem);
@@ -2910,34 +2904,29 @@ namespace  stateestimate{
 #endif
             
             finalicp::GaussNewtonSolverNVA::Params params;
-            // params.verbose = options_.verbose;
+            params.verbose = options_.verbose;
             params.max_iterations = static_cast<unsigned int>(options_.max_iterations);
             params.line_search = (iter >= 2 && options_.use_line_search); // Enable line search after 2 iterations if configured
             if (swf_inside_icp) {params.reuse_previous_pattern = false;}
+            finalicp::GaussNewtonSolverNVA solver(*problem, params);
 
-            // CORRECTION
-            solver_ptr = std::make_unique<finalicp::GaussNewtonSolverNVA>(*problem, params);
-            solver_ptr->optimize(); // Use the pointer to optimize
-
-            // finalicp::GaussNewtonSolverNVA solver(*problem, params);
-            // solver.optimize();
             // --- WRAP SOLVER CALL IN A TRY-CATCH BLOCK ---
-//             try {
-//                 solver.optimize();
-//             } catch (const finalicp::decomp_failure& e) {
-// #ifdef DEBUG
-//                 std::cerr << "[ICP DEBUG] CATASTROPHIC SOLVER FAILURE: " << e.what() << std::endl;
-//                 std::cerr << "[ICP DEBUG] This usually means the Hessian matrix is not positive-definite, likely due to an ill-conditioned problem (e.g., bad geometry, insufficient constraints/priors)." << std::endl;
-// #endif
-//                 icp_success = false;
-//                 break;
-//             } catch (const std::exception& e) {
-// #ifdef DEBUG
-//                 std::cerr << "[ICP DEBUG] AN UNEXPECTED EXCEPTION OCCURRED DURING SOLVER::OPTIMIZE: " << e.what() << std::endl;
-// #endif
-//                 icp_success = false;
-//                 break;
-//             }
+            try {
+                solver.optimize();
+            } catch (const finalicp::decomp_failure& e) {
+#ifdef DEBUG
+                std::cerr << "[ICP DEBUG] CATASTROPHIC SOLVER FAILURE: " << e.what() << std::endl;
+                std::cerr << "[ICP DEBUG] This usually means the Hessian matrix is not positive-definite, likely due to an ill-conditioned problem (e.g., bad geometry, insufficient constraints/priors)." << std::endl;
+#endif
+                icp_success = false;
+                break;
+            } catch (const std::exception& e) {
+#ifdef DEBUG
+                std::cerr << "[ICP DEBUG] AN UNEXPECTED EXCEPTION OCCURRED DURING SOLVER::OPTIMIZE: " << e.what() << std::endl;
+#endif
+                icp_success = false;
+                break;
+            }
 
 #ifdef DEBUG
             timer[2].second->stop(); // Stop optimization timer
@@ -3038,16 +3027,14 @@ namespace  stateestimate{
 
 
             // Check convergence
-            if (index_frame > 1 &&
-                diff_rot < options_.threshold_orientation_norm &&
+            if ((index_frame > 1) &&
+                (diff_rot < options_.threshold_orientation_norm &&
                 diff_trans < options_.threshold_translation_norm &&
-                diff_vel < (options_.threshold_translation_norm * 10.0 + options_.threshold_orientation_norm * 10.0) &&
-                diff_acc < (options_.threshold_translation_norm * 100.0 + options_.threshold_orientation_norm * 100.0)) {
-                if (options_.debug_print) {
+                diff_vel < options_.threshold_translation_norm * 10.0 + options_.threshold_orientation_norm * 10.0 &&
+                diff_acc < options_.threshold_translation_norm * 100.0 + options_.threshold_orientation_norm * 100.0)){
 #ifdef DEBUG
-                    std::cout << "[ICP DEBUG] Finished with N=" << iter << " ICP iterations" << std::endl;
+                std::cout << "[ICP DEBUG] Finished with N=" << iter << " ICP iterations" << std::endl;
 #endif
-                }
                 if (options_.break_icp_early) {
                     break; // Exit loop if converged and early breaking is enabled
                 }
@@ -3110,13 +3097,13 @@ namespace  stateestimate{
                                     std::to_string(sliding_window_filter_->getNumberOfCostTerms()));
         }
 
-        // finalicp::GaussNewtonSolverNVA::Params params;
-        // params.verbose = options_.verbose;
-        // params.max_iterations = static_cast<unsigned int>(options_.max_iterations);
-        // finalicp::GaussNewtonSolverNVA solver(*sliding_window_filter_, params);
-        // if (!swf_inside_icp) {
-        //     solver.optimize(); // Optimize the sliding window filter if not done in ICP loop
-        // }
+        finalicp::GaussNewtonSolverNVA::Params params;
+        params.verbose = options_.verbose;
+        params.max_iterations = static_cast<unsigned int>(options_.max_iterations);
+        finalicp::GaussNewtonSolverNVA solver(*sliding_window_filter_, params);
+        if (!swf_inside_icp) {
+            solver.optimize(); // Optimize the sliding window filter if not done in ICP loop
+        }
 
         // Step 51: Lock T_mi variables (if applicable)
         // Ensures consistent IMU-to-map transformations for future variables
@@ -3146,22 +3133,12 @@ namespace  stateestimate{
         current_estimate.mid_w = SLAM_TRAJ->getVelocityInterpolator(curr_mid_slam_time)->value();
         current_estimate.mid_dw = SLAM_TRAJ->getAccelerationInterpolator(curr_mid_slam_time)->value();
         current_estimate.mid_T_mi = trajectory_vars_[prev_trajectory_var_index].T_mi->value().matrix();
-
-        // ADD THIS LINE
-        if (!solver_ptr) {
-            throw std::runtime_error("ICP loop finished without a valid solver.");
-        }
+         // ADD THIS LINE
 #ifdef DEBUG
-        std::cout << "[ICP DEBUG] About to construct Covariance object." << std::endl;
+        std::cout << "[ICP DEBUG] About to construct Covariance object. If crash happens next, this is the cause." << std::endl;
 #endif
-        finalicp::Covariance covariance(*solver_ptr);
-#ifdef DEBUG
-        std::cout << "[ICP DEBUG] About to run getCovariance." << std::endl;
-#endif
+        finalicp::Covariance covariance(solver);
         current_estimate.mid_state_cov = SLAM_TRAJ->getCovariance(covariance, trajectory_vars_[prev_trajectory_var_index].time);
-#ifdef DEBUG
-        std::cout << "[ICP DEBUG] Finish getCovariance." << std::endl;
-#endif
 
         // Update begin and end poses
         current_estimate.begin_R = curr_begin_T_ms.block<3, 3>(0, 0);
