@@ -2622,7 +2622,7 @@ namespace  stateestimate{
 
         // Step 42: Configure sliding window filter usage
         // Determines whether to use SlidingWindowFilter inside ICP loop
-        bool swf_inside_icp = true; // Default for KITTI-raw: false, but true here
+        bool swf_inside_icp = false; // Default for KITTI-raw: false, but true here
         if (index_frame > options_.init_num_frames) {
             swf_inside_icp = true; // Use sliding window filter after initial frames
         }
