@@ -3140,6 +3140,9 @@ namespace  stateestimate{
         std::cout << "[ICP DEBUG] About to construct Covariance object." << std::endl;
 #endif
         finalicp::Covariance covariance(solver);
+#ifdef DEBUG
+        std::cout << "[ICP DEBUG] About to run getCovariance." << std::endl;
+#endif
         current_estimate.mid_state_cov = SLAM_TRAJ->getCovariance(covariance, trajectory_vars_[prev_trajectory_var_index].time);
 
         // Update begin and end poses
