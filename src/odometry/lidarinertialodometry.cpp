@@ -2927,11 +2927,11 @@ namespace  stateestimate{
                 problem->addCostTerm(cost); // Add T_mi prior cost terms
             }
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] problem: add p2p_super_cost_term total: " << p2p_super_cost_term.size() << std::endl;
+                std::cout << "[ICP DEBUG] problem: add p2p_super_cost_term." << std::endl;
 #endif
             problem->addCostTerm(p2p_super_cost_term); // Add point-to-plane super cost term
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] problem: add imu_super_cost_term total: " << imu_super_cost_term.size() << std::endl;
+                std::cout << "[ICP DEBUG] problem: add imu_super_cost_term total." << std::endl;
 #endif
             if (options_.use_imu) {
                 problem->addCostTerm(imu_super_cost_term); // Add IMU super cost term
@@ -3153,12 +3153,12 @@ namespace  stateestimate{
             sliding_window_filter_->addCostTerm(T_mi_prior_cost); // Add T_mi prior cost terms
         }
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] sliding_window_filter_: add p2p_super_cost_term total: " << p2p_super_cost_term.size() << std::endl;
+            std::cout << "[ICP DEBUG] sliding_window_filter_: add p2p_super_cost_term total." << std::endl;
 #endif
         sliding_window_filter_->addCostTerm(p2p_super_cost_term); // Add point-to-plane super cost term
         if (options_.use_imu) {
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] sliding_window_filter_: add imu_super_cost_term total: " << imu_super_cost_term.size() << std::endl;
+            std::cout << "[ICP DEBUG] sliding_window_filter_: add imu_super_cost_term." << std::endl;
 #endif
             sliding_window_filter_->addCostTerm(imu_super_cost_term); // Add IMU super cost term
         }
