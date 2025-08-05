@@ -829,7 +829,8 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         if (index_frame == 0) {
-            std::cout << "[REG DEBUG] Frame 0 Initial Pose (R_ms):\n" << trajectory_[index_frame].end_R << "\n(t_ms):\n" << trajectory_[index_frame].end_t.transpose() << std::endl;
+            std::cout << "[REG DEBUG] Frame 0 Initial Pose (R_ms):\n" << trajectory_[index_frame].end_R  << std::endl;
+            std::cout << "[REG DEBUG] Frame 0 Initial Pose (t_ms):\n" << trajectory_[index_frame].end_t.transpose() << std::endl;
         }
         // [DEBUG] Check the initial motion prediction
         if (!trajectory_[index_frame].begin_R.allFinite() || !trajectory_[index_frame].end_R.allFinite()) {
@@ -1743,6 +1744,12 @@ namespace  stateestimate{
         // Step 14: Add previous state to SLAM trajectory
         // This anchors the trajectory at the previous frame’s end state
         SLAM_TRAJ->add(prev_slam_time, prev_T_rm_var, prev_w_mr_inr_var, prev_dw_mr_inr_var);
+#ifdef DEBUG
+        std::cout << "[ICP DEBUG] SLAM_TRAJ: add prev_slam_time: " << prev_slam_time << std::endl; 
+        std::cout << "[ICP DEBUG] SLAM_TRAJ: add prev_T_rm_var: "  << prev_T_rm_var << std::endl;
+        std::cout << "[ICP DEBUG] SLAM_TRAJ: add prev_w_mr_inr_var: " << prev_w_mr_inr_var << std::endl;
+        std::cout << "[ICP DEBUG] SLAM_TRAJ: add prev_dw_mr_inr_var: " << prev_dw_mr_inr_var << std::endl;
+#endif
 
         // Step 15: Add previous state variables to optimization list
         // These variables will be optimized (if not locked) in ICP
@@ -1750,10 +1757,19 @@ namespace  stateestimate{
         SLAM_STATE_VAR.emplace_back(prev_w_mr_inr_var); // Add velocity
         SLAM_STATE_VAR.emplace_back(prev_dw_mr_inr_var); // Add acceleration
 
+#ifdef DEBUG
+    std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace prev_T_rm_var: " << prev_T_rm_var << std::endl; 
+    std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace prev_w_mr_inr_var: "  << prev_w_mr_inr_var << std::endl;
+    std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace prev_dw_mr_inr_var: " << prev_dw_mr_inr_var << std::endl;
+#endif
+
         // Step 16: Handle IMU-related state variables (if IMU is enabled)
         if (options_.use_imu) {
             // Add IMU biases to optimization (biases evolve over time)
             SLAM_STATE_VAR.emplace_back(prev_imu_biases_var);
+#ifdef DEBUG
+            std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace prev_imu_biases_var: " << prev_imu_biases_var << std::endl; 
+#endif
 
             // Decide how to handle T_mi (IMU-to-map transformation)
             if (use_T_mi_gt) {
@@ -1768,6 +1784,9 @@ namespace  stateestimate{
                     // Optimize T_mi if not init-only or this is the first frame
                     // T_mi_init_only=true means optimize T_mi only at index_frame=1
                     SLAM_STATE_VAR.emplace_back(prev_T_mi_var); // Add for optimization
+#ifdef DEBUG
+                    std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace prev_T_mi_var: " << prev_T_mi_var << std::endl; 
+#endif
                 }
                 // If T_mi_init_only=true and index_frame>1, T_mi stays as is (not optimized)
             }
@@ -1873,13 +1892,27 @@ namespace  stateestimate{
 
             // Add state to trajectory
             SLAM_TRAJ->add(knot_slam_time, T_rm_var, w_mr_inr_var, dw_mr_inr_var);
+#ifdef DEBUG
+            std::cout << "[ICP DEBUG] SLAM_TRAJ: add knot_slam_time: " << knot_slam_time << std::endl; 
+            std::cout << "[ICP DEBUG] SLAM_TRAJ: add T_rm_var: "  << T_rm_var << std::endl;
+            std::cout << "[ICP DEBUG] SLAM_TRAJ: add w_mr_inr_var: " << w_mr_inr_var << std::endl;
+            std::cout << "[ICP DEBUG] SLAM_TRAJ: add dw_mr_inr_var: " << dw_mr_inr_var << std::endl;
+#endif
 
             // Add state variables to optimization list
             SLAM_STATE_VAR.emplace_back(T_rm_var); // Add pose
             SLAM_STATE_VAR.emplace_back(w_mr_inr_var); // Add velocity
             SLAM_STATE_VAR.emplace_back(dw_mr_inr_var); // Add acceleration
+#ifdef DEBUG
+            std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace T_rm_var: " << T_rm_var << std::endl; 
+            std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace w_mr_inr_var: " << prev_T_mi_var << std::endl; 
+            std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace dw_mr_inr_var: " << dw_mr_inr_var << std::endl; 
+#endif
             if (options_.use_imu) {
                 SLAM_STATE_VAR.emplace_back(imu_biases_var); // Add IMU biases
+#ifdef DEBUG
+                std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace imu_biases_var: " << imu_biases_var << std::endl; 
+#endif
             }
 
             const auto T_mi_var = finalicp::se3::SE3StateVar::MakeShared(use_T_mi_gt ? math::se3::Transformation() : prev_T_mi);
@@ -1893,6 +1926,9 @@ namespace  stateestimate{
                         T_mi_var->locked() = true;
                     } else {
                         SLAM_STATE_VAR.emplace_back(T_mi_var); // Optimize T_mi
+#ifdef DEBUG
+                        std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace T_mi_var: " << T_mi_var << std::endl; 
+#endif
                     }
                 }
                 trajectory_vars_.emplace_back(knot_slam_time, T_rm_var, w_mr_inr_var, dw_mr_inr_var, imu_biases_var, T_mi_var);
@@ -1930,6 +1966,12 @@ namespace  stateestimate{
             SLAM_TRAJ->addPosePrior(PREV_VAR.time, T_rm, P0_pose); // Constrain initial pose
             SLAM_TRAJ->addVelocityPrior(PREV_VAR.time, w_mr_inr, P0_vel); // Constrain initial velocity
             SLAM_TRAJ->addAccelerationPrior(PREV_VAR.time, dw_mr_inr, P0_accel); // Constrain initial acceleration
+            
+#ifdef DEBUG
+            std::cout << "[ICP DEBUG] SLAM_TRAJ: addPosePrior PREV_VAR.time: " << PREV_VAR.time << std::endl;
+            std::cout << "[ICP DEBUG] SLAM_TRAJ: addVelocityPrior PREV_VAR.time: " << PREV_VAR.time << std::endl; 
+            std::cout << "[ICP DEBUG] SLAM_TRAJ: addAccelerationPrior PREV_VAR.time: " << PREV_VAR.time << std::endl; 
+#endif
 
             if (PREV_VAR.time != Time(trajectory_.at(0).end_timestamp)) throw std::runtime_error{"inconsistent timestamp"};
         }
@@ -2273,11 +2315,17 @@ namespace  stateestimate{
                 if (options_.use_accel) {
                     const auto acc_cost = finalicp::WeightedLeastSqCostTerm<3>::MakeShared(acc_error_func, acc_noise_model, acc_loss_func);
                     imu_cost_terms.emplace_back(acc_cost);
+#ifdef DEBUG
+                    std::cout << "[ICP DEBUG] imu_cost_terms: Emplace acc_cost: " << acc_cost << std::endl;
+#endif
                 }
 
                 // Add gyroscope cost term
                 const auto gyro_cost = finalicp::WeightedLeastSqCostTerm<3>::MakeShared(gyro_error_func, gyro_noise_model, gyro_loss_func);
                 imu_cost_terms.emplace_back(gyro_cost);
+#ifdef DEBUG
+                std::cout << "[ICP DEBUG] imu_cost_terms: Emplace gyro_cost: " << gyro_cost << std::endl;
+#endif
             }
 
             // Step 34: Add prior cost terms for IMU biases
@@ -2628,6 +2676,10 @@ namespace  stateestimate{
             // Initialize optimization problem based on swf_inside_icp
             const auto problem = [&]() -> finalicp::Problem::Ptr {
                 if (swf_inside_icp) {
+#ifdef DEBUG
+                    std::cout << "[ICP DEBUG] swf_inside_icp is true." << std::endl; 
+                    std::cout << "[ICP DEBUG] problem: use SlidingWindowFilter." << std::endl; 
+#endif
                     // Use SlidingWindowFilter for sliding window optimization
                     return std::make_shared<finalicp::SlidingWindowFilter>(*sliding_window_filter_);
                 } else {
@@ -2635,6 +2687,9 @@ namespace  stateestimate{
                     auto problem = finalicp::OptimizationProblem::MakeShared(options_.num_threads);
                     for (const auto& var : SLAM_STATE_VAR) {
                         problem->addStateVariable(var);
+#ifdef DEBUG
+                        std::cout << "[ICP DEBUG] problem: use OptimizationProblem addStateVariable: " << var << std::endl; 
+#endif
                     }
                     return problem;
                 }
@@ -2642,8 +2697,14 @@ namespace  stateestimate{
 
             // Add prior cost terms to the problem
             SLAM_TRAJ->addPriorCostTerms(*problem);
+#ifdef DEBUG
+            std::cout << "[ICP DEBUG] SLAM_TRAJ: addPriorCostTerms problem: " << std::endl;
+#endif
             for (const auto& prior_cost_term : prior_cost_terms) {
                 problem->addCostTerm(prior_cost_term);
+#ifdef DEBUG
+                std::cout << "[ICP DEBUG] problem: addCostTerm prior_cost_term: " << std::endl;
+#endif
             }
 
             // Step 44: Clear measurement cost terms and prepare for association
@@ -2838,23 +2899,44 @@ namespace  stateestimate{
 
             p2p_super_cost_term->initP2PMatches(); // Initialize point-to-plane matches
             for (const auto& cost : meas_cost_terms) {
-                problem->addCostTerm(cost); // Add point-to-plane cost terms
+                problem->addCostTerm(cost); // Add point-to-plane cost terms | this is only if not using p2psupercostterm
+#ifdef DEBUG
+                std::cout << "[ICP DEBUG] problem: add meas_cost_terms: " << cost << std::endl;
+#endif
             }
             for (const auto& cost : imu_cost_terms) {
                 problem->addCostTerm(cost); // Add IMU cost terms
+#ifdef DEBUG
+                std::cout << "[ICP DEBUG] problem: add imu_cost_terms: " << cost << std::endl;
+#endif
             }
             for (const auto& cost : pose_meas_cost_terms) {
                 problem->addCostTerm(cost); // Add pose measurement cost terms
+#ifdef DEBUG
+                std::cout << "[ICP DEBUG] problem: add pose_meas_cost_terms: " << cost << std::endl;
+#endif
             }
             for (const auto& cost : imu_prior_cost_terms) {
                 problem->addCostTerm(cost); // Add IMU bias prior cost terms
+#ifdef DEBUG
+                std::cout << "[ICP DEBUG] problem: add imu_prior_cost_terms: " << cost << std::endl;
+#endif
             }
             for (const auto& cost : T_mi_prior_cost_terms) {
                 problem->addCostTerm(cost); // Add T_mi prior cost terms
+#ifdef DEBUG
+                std::cout << "[ICP DEBUG] problem: add T_mi_prior_cost_terms: " << cost << std::endl;
+#endif
             }
             problem->addCostTerm(p2p_super_cost_term); // Add point-to-plane super cost term
+#ifdef DEBUG
+                std::cout << "[ICP DEBUG] problem: add p2p_super_cost_term: " << cost << std::endl;
+#endif
             if (options_.use_imu) {
                 problem->addCostTerm(imu_super_cost_term); // Add IMU super cost term
+#ifdef DEBUG
+                std::cout << "[ICP DEBUG] problem: add imu_super_cost_term: " << cost << std::endl;
+#endif
             }
 
 #ifdef DEBUG
@@ -3035,28 +3117,54 @@ namespace  stateestimate{
         // Step 49: Add cost terms to the sliding window filter
         // Includes state priors, point-to-plane, IMU, pose, and T_mi cost terms
         SLAM_TRAJ->addPriorCostTerms(*sliding_window_filter_); // Add state priors (e.g., for initial state x_0)
+#ifdef DEBUG
+            std::cout << "[ICP DEBUG] SLAM_TRAJ: addPriorCostTerms with sliding_window_filter_" << std::endl;
+#endif
         for (const auto& prior_cost_term : prior_cost_terms) {
-            sliding_window_filter_->addCostTerm(prior_cost_term); // Add prior cost terms
+            sliding_window_filter_->addCostTerm(prior_cost_term); // Add prior cost terms | not really adding much
+#ifdef DEBUG
+            std::cout << "[ICP DEBUG] sliding_window_filter_: add prior_cost_terms: " << prior_cost_term << std::endl;
+#endif
         }
         for (const auto& meas_cost_term : meas_cost_terms) {
-            sliding_window_filter_->addCostTerm(meas_cost_term); // Add point-to-plane cost terms
+            sliding_window_filter_->addCostTerm(meas_cost_term); // Add point-to-plane cost terms | this is only if not using p2psupercostterm
+#ifdef DEBUG
+            std::cout << "[ICP DEBUG] sliding_window_filter_: add meas_cost_terms: " << meas_cost_terms << std::endl;
+#endif
         }
         for (const auto& pose_cost : pose_meas_cost_terms) {
             sliding_window_filter_->addCostTerm(pose_cost); // Add pose measurement cost terms
+#ifdef DEBUG
+            std::cout << "[ICP DEBUG] sliding_window_filter_: add pose_meas_cost_terms: " << pose_meas_cost_terms << std::endl;
+#endif
         }
         for (const auto& imu_cost : imu_cost_terms) {
             sliding_window_filter_->addCostTerm(imu_cost); // Add IMU cost terms
+#ifdef DEBUG
+            std::cout << "[ICP DEBUG] sliding_window_filter_: add imu_cost_terms: " << imu_cost_terms << std::endl;
+#endif
         }
         for (const auto& imu_prior_cost : imu_prior_cost_terms) {
             sliding_window_filter_->addCostTerm(imu_prior_cost); // Add IMU bias prior cost terms
+#ifdef DEBUG
+            std::cout << "[ICP DEBUG] sliding_window_filter_: add imu_prior_cost_terms: " << imu_prior_cost_terms << std::endl;
+#endif
         }
         for (const auto& T_mi_prior_cost : T_mi_prior_cost_terms) {
             sliding_window_filter_->addCostTerm(T_mi_prior_cost); // Add T_mi prior cost terms
+#ifdef DEBUG
+            std::cout << "[ICP DEBUG] sliding_window_filter_: add T_mi_prior_cost_terms: " << T_mi_prior_cost_terms << std::endl;
+#endif
         }
         sliding_window_filter_->addCostTerm(p2p_super_cost_term); // Add point-to-plane super cost term
-        
+#ifdef DEBUG
+            std::cout << "[ICP DEBUG] sliding_window_filter_: add p2p_super_cost_term: " << T_mi_prior_cost_terms << std::endl;
+#endif
         if (options_.use_imu) {
             sliding_window_filter_->addCostTerm(imu_super_cost_term); // Add IMU super cost term
+#ifdef DEBUG
+            std::cout << "[ICP DEBUG] sliding_window_filter_: add imu_super_cost_term: " << imu_super_cost_term << std::endl;
+#endif
         }
 
 #ifdef DEBUG
@@ -3112,10 +3220,11 @@ namespace  stateestimate{
         current_estimate.mid_dw = SLAM_TRAJ->getAccelerationInterpolator(curr_mid_slam_time)->value();
         current_estimate.mid_T_mi = trajectory_vars_[prev_trajectory_var_index].T_mi->value().matrix();
          // ADD THIS LINE
-#ifdef DEBUG
-        std::cout << "[ICP DEBUG] About to construct Covariance object. If crash happens next, this is the cause." << std::endl;
-#endif
+
         finalicp::Covariance covariance(solver);
+#ifdef DEBUG
+        std::cout << "[ICP DEBUG] SLAM_TRAJ: getCovariance." << std::endl;
+#endif
         current_estimate.mid_state_cov = SLAM_TRAJ->getCovariance(covariance, trajectory_vars_[prev_trajectory_var_index].time);
 
         // Update begin and end poses
