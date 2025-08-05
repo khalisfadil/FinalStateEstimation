@@ -1383,7 +1383,8 @@ namespace  stateestimate{
 
         // Add trajectory states
         size_t num_states = 0;
-        for (size_t i = static_cast<int>(to_marginalize_); i < trajectory_vars_.size(); i++) {
+        size_t start_idx = std::max(static_cast<int>(to_marginalize_) - 1, 0);
+        for (size_t i = start_idx; i < trajectory_vars_.size(); i++) {
             const auto& var = trajectory_vars_.at(i);
             update_trajectory->add(var.time, var.T_rm, var.w_mr_inr, var.dw_mr_inr);
             num_states++;
