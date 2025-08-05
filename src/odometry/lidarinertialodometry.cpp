@@ -1937,7 +1937,7 @@ namespace  stateestimate{
         // Step 25: Add IMU-related prior cost terms (if IMU is enabled)
         if (options_.use_imu) {
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] Defining IMU-Related prior cost term (If IMU is enabled)" std::endl;
+            std::cout << "[ICP DEBUG] Defining IMU-Related prior cost term (If IMU is enabled)" << std::endl;
 #endif
             // For the initial frame, add a prior for IMU biases
             if (index_frame == 1) {
@@ -2232,11 +2232,7 @@ namespace  stateestimate{
                 }
 
 #ifdef DEBUG
-                if (imu_factors_added == 0) { // Print for the first IMU data point only to avoid spam
-                    std::cout << "[ICP DEBUG]   - IMU data at timestamp " << std::fixed << imu_data.timestamp
-                            << " falls between knot " << i << " (" << trajectory_vars_[i].time.seconds()
-                            << "s) and knot " << i + 1 << " (" << trajectory_vars_[i + 1].time.seconds() << "s)." << std::endl;
-                }
+                    std::cout << "[ICP DEBUG] IMU Data: " << std::cout << std::setprecision(4) << imu.timestamp << " " << imu.ang_vel.transpose() << " " << imu.lin_acc.transpose() << std::endl;
 #endif
 
                 // Interpolate IMU biases between knots
