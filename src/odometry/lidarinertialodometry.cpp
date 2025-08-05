@@ -2957,7 +2957,7 @@ namespace  stateestimate{
             // Uses Gauss-Newton solver to refine the trajectory
 #ifdef DEBUG
             timer[2].second->start(); // Start optimization timer
-            std::cout << "[ICP DEBUG] Calling solver.optimize()... Number of variables:\n" << problem->getStateVector()->getNumberOfStates() << ", Number of cost terms: " << problem->getNumberOfCostTerms() << std::endl;
+            std::cout << "[ICP DEBUG] Calling solver.optimize()... Number of variables: " << problem->getStateVector()->getNumberOfStates() << ", Number of cost terms: " << problem->getNumberOfCostTerms() << std::endl;
 #endif
             
             finalicp::GaussNewtonSolverNVA::Params params;
