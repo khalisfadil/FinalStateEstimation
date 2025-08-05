@@ -736,27 +736,27 @@ namespace  stateestimate{
         using namespace finalicp::traj;
 
         // Cache T_sr inverse
-        const Eigen::Matrix4d T_sr_inv = options_.T_sr.inverse();
+        const Eigen::Matrix4d T_rs = options_.T_sr.inverse();
 
         // Sequential update
         for (auto& frame : trajectory_) {
             // Begin pose
             Time begin_slam_time(frame.begin_timestamp);
             const auto begin_T_mr = full_trajectory->getPoseInterpolator(begin_slam_time)->value().inverse().matrix();
-            const auto begin_T_ms = begin_T_mr * T_sr_inv;
+            const auto begin_T_ms = begin_T_mr * T_rs;
             frame.begin_R = begin_T_ms.block<3, 3>(0, 0);
             frame.begin_t = begin_T_ms.block<3, 1>(0, 3);
 
             // Mid pose
             Time mid_slam_time(static_cast<double>(frame.getEvalTime()));
             const auto mid_T_mr = full_trajectory->getPoseInterpolator(mid_slam_time)->value().inverse().matrix();
-            const auto mid_T_ms = mid_T_mr * T_sr_inv;
+            const auto mid_T_ms = mid_T_mr * T_rs;
             frame.setMidPose(mid_T_ms);
 
             // End pose
             Time end_slam_time(frame.end_timestamp);
             const auto end_T_mr = full_trajectory->getPoseInterpolator(end_slam_time)->value().inverse().matrix();
-            const auto end_T_ms = end_T_mr * T_sr_inv;
+            const auto end_T_ms = end_T_mr * T_rs;
             frame.end_R = end_T_ms.block<3, 3>(0, 0);
             frame.end_t = end_T_ms.block<3, 1>(0, 3);
         }
@@ -810,7 +810,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [DEBUG] Announce the start of processing for a new frame
-        std::cout << "\n+++ [REG DEBUG] Starting RegisterFrame for index " << index_frame << " +++" << std::endl;
+        std::cout << "[REG DEBUG] Starting RegisterFrame for index " << index_frame << std::endl;
         std::cout << "[REG DEBUG] Input pointcloud size: " << const_frame.pointcloud.size() << std::endl;
 #endif
 
@@ -910,14 +910,10 @@ namespace  stateestimate{
 #endif
 
             // Define initial transformations and velocities
-            math::se3::Transformation T_rm(options_.T_rm_init);
-
-            // Get the ground truth T_mi directly
-            const auto& initial_trajectory = trajectory_[index_frame];
-            math::se3::Transformation T_ms(initial_trajectory.begin_R, initial_trajectory.begin_t);
-            math::se3::Transformation T_mi_gt = T_ms; // Since sensors are aligned
-
+            math::se3::Transformation T_rm;
+            math::se3::Transformation T_mi;
             math::se3::Transformation T_sr(options_.T_sr);
+
             Eigen::Matrix<double, 6, 1> w_mr_inr = Eigen::Matrix<double, 6, 1>::Zero();
             Eigen::Matrix<double, 6, 1> dw_mr_inr = Eigen::Matrix<double, 6, 1>::Zero();
             Eigen::Matrix<double, 6, 1> b_zero = Eigen::Matrix<double, 6, 1>::Zero();
@@ -930,7 +926,7 @@ namespace  stateestimate{
             auto begin_dw_mr_inr_var = VSpaceStateVar<6>::MakeShared(dw_mr_inr);
             auto begin_imu_biases = VSpaceStateVar<6>::MakeShared(b_zero);
             // Initialize T_mi_var DIRECTLY with the ground truth value
-            auto begin_T_mi_var = SE3StateVar::MakeShared(T_mi_gt); 
+            auto begin_T_mi_var = SE3StateVar::MakeShared(T_mi); 
             trajectory_vars_.emplace_back(begin_slam_time, std::move(begin_T_rm_var), std::move(begin_w_mr_inr_var),
                                         std::move(begin_dw_mr_inr_var), std::move(begin_imu_biases), std::move(begin_T_mi_var));
 
@@ -942,7 +938,7 @@ namespace  stateestimate{
             auto end_dw_mr_inr_var = VSpaceStateVar<6>::MakeShared(dw_mr_inr);
             auto end_imu_biases = VSpaceStateVar<6>::MakeShared(b_zero);
             // Initialize T_mi_var DIRECTLY with the ground truth value
-            auto end_T_mi_var = SE3StateVar::MakeShared(T_mi_gt); 
+            auto end_T_mi_var = SE3StateVar::MakeShared(T_mi); 
             trajectory_vars_.emplace_back(end_slam_time, std::move(end_T_rm_var), std::move(end_w_mr_inr_var),
                                         std::move(end_dw_mr_inr_var), std::move(end_imu_biases), std::move(end_T_mi_var));
 
@@ -950,6 +946,9 @@ namespace  stateestimate{
             std::cout << "[REG DEBUG] Frame 0: Created " << trajectory_vars_.size() << " initial state variables." << std::endl;
             std::cout << "[REG DEBUG] Frame 0 timestamps: begin=" << std::fixed << begin_time << ", end=" << end_time << std::endl;
 #endif
+            Eigen::Matrix<double, 6, 1> xi_mi = initialize_gravity(const_frame.imu_data_vec);
+            begin_T_mi_var->update(xi_mi);
+            end_T_mi_var->update(xi_mi);
 
             to_marginalize_ = 1;
 
@@ -1055,7 +1054,7 @@ namespace  stateestimate{
             for (size_t i = 0; i < timer.size(); i++) {
                 std::cout << "Elapsed " << timer[i].first << *(timer[i].second) << std::endl;
             }
-            std::cout << "+++ [REG DEBUG] Finished RegisterFrame for index " << index_frame << " +++" << std::endl;
+            std::cout << "[REG DEBUG] Finished RegisterFrame for index " << index_frame << std::endl;
 #endif
         return summary;
     }
@@ -1110,8 +1109,8 @@ namespace  stateestimate{
 
 #ifdef DEBUG
             // [ADDED DEBUG] Print all calculated timestamps before assignment
-            std::cout << "--- [TIMESTAMP DEBUG] Frame " << index_frame << ": min=" << std::fixed << min_timestamp
-                    << ", max=" << max_timestamp << ", mid=" << mid_timestamp << " ---" << std::endl;
+            std::cout << "[INIT TS DEBUG] Frame " << index_frame << ": min=" << std::fixed << min_timestamp
+                    << ", max=" << max_timestamp << ", mid=" << mid_timestamp << std::endl;
 #endif
 
         // Assign to trajectory
@@ -1137,25 +1136,30 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [ADDED DEBUG] Announce entry into the function
-        std::cout << "--- [MOTION DEBUG] Initializing motion for frame " << index_frame << ". ---" << std::endl;
+        std::cout << "[INIT MOTION DEBUG] Initializing motion for frame " << index_frame << ". ---" << std::endl;
 #endif
 
         if (index_frame == 0) { //MAIN ALLERT as T_sr is identity. T_ms is exactly same as T_mr
             // --- For the very first frame, use the ground truth initial pose ---
 
-            // 1. Get the ground truth T_rm from options.
-            const Eigen::Matrix4d T_rm = options_.T_rm_init;
+            // // 1. Get the ground truth T_rm from options.
+            // const Eigen::Matrix4d T_rm = options_.T_rm_init;
 
-            // 2. Efficiently compute its inverse to get T_mr.
-            Eigen::Matrix3d R_rm = T_rm.block<3, 3>(0, 0);
-            Eigen::Vector3d t_rm = T_rm.block<3, 1>(0, 3);
+            // 1. Let initial as identity
+            // const Eigen::Matrix4d T_rm = Eigen::Matrix<double, 4, 4>::Identity();
 
-            Eigen::Matrix3d R_mr = R_rm.transpose();
-            Eigen::Vector3d t_mr = -R_mr * t_rm;
+            // // 2. Efficiently compute its inverse to get T_mr.
+            // Eigen::Matrix3d R_rm = T_rm.block<3, 3>(0, 0);
+            // Eigen::Vector3d t_rm = T_rm.block<3, 1>(0, 3);
 
-            Eigen::Matrix4d T_mr = Eigen::Matrix4d::Identity();
-            T_mr.block<3, 3>(0, 0) = R_mr;
-            T_mr.block<3, 1>(0, 3) = t_mr;
+            // Eigen::Matrix3d R_mr = R_rm.transpose();
+            // Eigen::Vector3d t_mr = -R_mr * t_rm;
+
+            // Eigen::Matrix4d T_mr = Eigen::Matrix4d::Identity();
+            // T_mr.block<3, 3>(0, 0) = R_mr;
+            // T_mr.block<3, 1>(0, 3) = t_mr;
+            const Eigen::Matrix4d T_mr = Eigen::Matrix<double, 4, 4>::Identity();
+
 
             // 3. Get the transformation from sensor to robot (T_rs).
             const Eigen::Matrix4d T_rs = options_.T_sr.inverse();
@@ -1165,12 +1169,12 @@ namespace  stateestimate{
 
 #ifdef DEBUG
             // [ADDED DEBUG] Print the initial transformations for Frame 0
-            std::cout << "[MOTION DEBUG] Frame 0: Using initial pose from options." << std::endl;
-            std::cout << "[MOTION DEBUG] Frame 0: Initial Sensor Pose (T_ms):\n" << T_ms << std::endl;
+            std::cout << "[INIT MOTION DEBUG] Frame 0: Using initial pose from options." << std::endl;
+            std::cout << "[INIT MOTION DEBUG] Frame 0: Initial Sensor Pose (T_ms):\n" << T_ms << std::endl;
             if (!T_ms.allFinite()) {
-                std::cout << "--- [MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)! ---" << std::endl;
+                std::cout << "[INIT MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)!" << std::endl;
             } else {
-                std::cout << "--- [MOTION DEBUG] Initial pose T_ms is finite. ---" << std::endl;
+                std::cout << "[INIT MOTION DEBUG] Initial pose T_ms is finite." << std::endl;
             }
 #endif
             // 5. Set the trajectory's initial pose.
@@ -1188,13 +1192,13 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [ADDED DEBUG] Confirm the pose was copied for Frame 1
-        std::cout << "[MOTION DEBUG] Frame 1: Copying pose from end of Frame 0." << std::endl;
-        std::cout << "[MOTION DEBUG] Frame 1: Initial Pose (Rotation):\n" << trajectory_[index_frame].begin_R << std::endl;
-        std::cout << "[MOTION DEBUG] Frame 1: Initial Pose (Translation): " << trajectory_[index_frame].begin_t.transpose() << std::endl;
+        std::cout << "[INIT MOTION DEBUG] Frame 1: Copying pose from end of Frame 0." << std::endl;
+        std::cout << "[INIT MOTION DEBUG] Frame 1: Initial Pose (Rotation):\n" << trajectory_[index_frame].begin_R << std::endl;
+        std::cout << "[INIT MOTION DEBUG] Frame 1: Initial Pose (Translation): " << trajectory_[index_frame].begin_t.transpose() << std::endl;
         if (!trajectory_[index_frame].begin_R.allFinite() || !trajectory_[index_frame].end_R.allFinite() || !trajectory_[index_frame].begin_t.allFinite() || !trajectory_[index_frame].end_t.allFinite()) {
-            std::cout << "--- [MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)! ---" << std::endl;
+            std::cout << "[INIT MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)!" << std::endl;
         } else {
-            std::cout << "--- [MOTION DEBUG] Initial pose T_ms is finite. ---" << std::endl;
+            std::cout << "[INIT MOTION DEBUG] Initial pose T_ms is finite." << std::endl;
         }
 #endif
         
@@ -1217,13 +1221,13 @@ namespace  stateestimate{
 
 #ifdef DEBUG
             // [ADDED DEBUG] Show the extrapolated motion
-            std::cout << "[MOTION DEBUG] Frame " << index_frame << ": Extrapolating motion." << std::endl;
-            std::cout << "[MOTION DEBUG] Relative Motion (t_rel): " << t_rel.transpose() << std::endl;
-            std::cout << "[MOTION DEBUG] Extrapolated End Pose (Translation): " << trajectory_[index_frame].end_t.transpose() << std::endl;
+            std::cout << "[INIT MOTION DEBUG] Frame " << index_frame << ": Extrapolating motion." << std::endl;
+            std::cout << "[INIT MOTION DEBUG] Relative Motion (t_rel): " << t_rel.transpose() << std::endl;
+            std::cout << "[INIT MOTION DEBUG] Extrapolated End Pose (Translation): " << trajectory_[index_frame].end_t.transpose() << std::endl;
             if (!trajectory_[index_frame].begin_R.allFinite() || !trajectory_[index_frame].end_R.allFinite() || !trajectory_[index_frame].begin_t.allFinite() || !trajectory_[index_frame].end_t.allFinite()) {
-                std::cout << "--- [MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)! ---" << std::endl;
+                std::cout << "--- [INIT MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)! ---" << std::endl;
             } else {
-                std::cout << "--- [MOTION DEBUG] Initial pose T_ms is finite. ---" << std::endl;
+                std::cout << "--- [INIT MOTION DEBUG] Initial pose T_ms is finite. ---" << std::endl;
             }
 #endif
         }
@@ -1243,10 +1247,10 @@ namespace  stateestimate{
     subsampled point cloud, ensuring efficiency and robustness for registration tasks like ICP.*/
 
     std::vector<Point3D> lidarinertialodom::initializeFrame(int index_frame, const std::vector<Point3D> &const_frame) {
-
+        // this is critical as the code assume T_sr is identity. if T_sr is not identity then we need to add some more algorithm.
 #ifdef DEBUG
         // [ADDED DEBUG] Announce entry and check input size
-        std::cout << "--- [FRAME INIT DEBUG] Initializing frame " << index_frame << " with " << const_frame.size() << " input points. ---" << std::endl;
+        std::cout << "[FRAME INIT DEBUG] Initializing frame " << index_frame << " with " << const_frame.size() << " input points." << std::endl;
 #endif
 
         // Initialize point cloud
@@ -1313,13 +1317,13 @@ namespace  stateestimate{
         bool all_points_finite = true;
         for (const auto& point : frame) {
             if (!point.pt.allFinite()) {
-                std::cout << "+++ [FRAME INIT DEBUG] CRITICAL: A deskewed point is non-finite (NaN or inf)! +++" << std::endl;
+                std::cout << "[FRAME INIT DEBUG] CRITICAL: A deskewed point is non-finite (NaN or inf)!" << std::endl;
                 all_points_finite = false;
                 break;
             }
         }
         if (all_points_finite) {
-            std::cout << "--- [FRAME INIT DEBUG] All " << frame.size() << " deskewed points are finite. ---" << std::endl;
+            std::cout << "[FRAME INIT DEBUG] All " << frame.size() << " deskewed points are finite." << std::endl;
         }
 #endif
 
@@ -1347,7 +1351,7 @@ namespace  stateestimate{
     
 #ifdef DEBUG
         // [DEBUG] Announce the start of the function and its parameters
-        std::cout << "--- [MAP DEBUG] Starting updateMap ---" << std::endl;
+        std::cout << "[MAP DEBUG] Starting updateMap" << std::endl;
         std::cout << "[MAP DEBUG] Current frame index: " << index_frame << ", Updating with data from frame: " << update_frame << std::endl;
 #endif
 
@@ -1379,8 +1383,7 @@ namespace  stateestimate{
 
         // Add trajectory states
         size_t num_states = 0;
-        size_t start_idx = std::max(static_cast<int>(to_marginalize_) - 1, 0);
-        for (size_t i = start_idx; i < trajectory_vars_.size(); i++) {
+        for (size_t i = static_cast<int>(to_marginalize_); i < trajectory_vars_.size(); i++) {
             const auto& var = trajectory_vars_.at(i);
             update_trajectory->add(var.time, var.T_rm, var.w_mr_inr, var.dw_mr_inr);
             num_states++;
@@ -1404,11 +1407,9 @@ namespace  stateestimate{
             unique_point_times_set.insert(point.timestamp);
         }
         std::vector<double> unique_point_times(unique_point_times_set.begin(), unique_point_times_set.end());
-
 #ifdef DEBUG
         std::cout << "[MAP DEBUG] Found " << unique_point_times.size() << " unique timestamps in the point cloud." << std::endl;
 #endif
-
         // Cache interpolated poses
         const Eigen::Matrix4d T_rs = options_.T_sr.inverse(); // transformation of sensor relative to robot
 
@@ -1540,15 +1541,15 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [ADDED DEBUG] Check if we have any IMU data to begin with
-        std::cout << "--- [GRAVITY DEBUG] Received " << imu_data_vec.size() << " IMU data points for initialization. ---" << std::endl;
+        std::cout << "[GRAVITY INIT DEBUG] Received " << imu_data_vec.size() << " IMU data points for initialization." << std::endl;
         if (imu_data_vec.empty()) {
-            std::cout << "[GRAVITY DEBUG] CRITICAL: No IMU data provided, cannot initialize gravity. Returning zero vector." << std::endl;
+            std::cout << "[GRAVITY INIT DEBUG] CRITICAL: No IMU data provided, cannot initialize gravity. Returning zero vector." << std::endl;
             return Eigen::Matrix<double, 6, 1>::Zero();
         }
 #endif
 
         // Initialize state variables
-        const auto T_rm_init = finalicp::se3::SE3StateVar::MakeShared(math::se3::Transformation(options_.T_rm_init));
+        const auto T_rm_init = finalicp::se3::SE3StateVar::MakeShared(math::se3::Transformation());
         math::se3::Transformation T_mi;
         const auto T_mi_var = finalicp::se3::SE3StateVar::MakeShared(T_mi);
         T_rm_init->locked() = true;
@@ -1568,35 +1569,16 @@ namespace  stateestimate{
         // Create cost terms
         std::vector<finalicp::BaseCostTerm::ConstPtr> cost_terms;
         cost_terms.reserve(imu_data_vec.size()); // +1 for prior term
-        if (imu_data_vec.size() < static_cast<size_t>(options_.sequential_threshold)) {
-            // Sequential cost term creation with std::vector
-           for (const auto &imu_data : imu_data_vec) {
-                auto acc_error_func = finalicp::imu::AccelerationError(T_rm_init, dw_mr_inr, bias, T_mi_var, imu_data.lin_acc);
-                acc_error_func->setGravity(options_.gravity);
-                const auto acc_cost = finalicp::WeightedLeastSqCostTerm<3>::MakeShared(acc_error_func, noise_model, loss_func);
-                cost_terms.emplace_back(acc_cost);
-            }
-        } else {
-            // Parallel cost term creation with tbb::concurrent_vector
-            tbb::concurrent_vector<finalicp::BaseCostTerm::ConstPtr> concurrent_cost_terms(imu_data_vec.size());
-            // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
-            tbb::parallel_for(tbb::blocked_range<size_t>(0, imu_data_vec.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
-                    for (size_t i = range.begin(); i != range.end(); ++i) {
-                        const auto& imu_data = imu_data_vec[i];
-                        auto acc_error_func = finalicp::imu::AccelerationError(T_rm_init, dw_mr_inr, bias, T_mi_var, imu_data.lin_acc);
-                        acc_error_func->setGravity(options_.gravity);
-                        const auto acc_cost = finalicp::WeightedLeastSqCostTerm<3>::MakeShared(acc_error_func, noise_model, loss_func);
-                        concurrent_cost_terms[i] = acc_cost;
-                    }
-                });
-
-            // Transfer to std::vector
-            cost_terms.assign(concurrent_cost_terms.begin(), concurrent_cost_terms.end());
+        for (const auto &imu_data : imu_data_vec) {
+            auto acc_error_func = finalicp::imu::AccelerationError(T_rm_init, dw_mr_inr, bias, T_mi_var, imu_data.lin_acc);
+            acc_error_func->setGravity(options_.gravity);
+            const auto acc_cost = finalicp::WeightedLeastSqCostTerm<3>::MakeShared(acc_error_func, noise_model, loss_func);
+            cost_terms.emplace_back(acc_cost);
         }
 
 #ifdef DEBUG
         // [ADDED DEBUG] Confirm that cost terms were actually created
-        std::cout << "[GRAVITY DEBUG] Created " << cost_terms.size() << " acceleration cost terms." << std::endl;
+        std::cout << "[GRAVITY INIT DEBUG] Created " << cost_terms.size() << " acceleration cost terms." << std::endl;
 #endif
 
         {
@@ -1620,21 +1602,18 @@ namespace  stateestimate{
         problem.addStateVariable(T_mi_var);
 
         finalicp::GaussNewtonSolverNVA::Params params;
-        params.verbose = options_.verbose;
         params.max_iterations = static_cast<unsigned int>(options_.max_iterations);
         finalicp::GaussNewtonSolverNVA solver(problem, params);
         solver.optimize();
 
 #ifdef DEBUG
-        
-
-        std::cout<< "[DEBUG GRAVITY INIT] T_mi:\n" << T_mi_var->value().matrix() << std::endl;
-        std::cout << "[DEBUG GRAVITY INIT] T_mi_var:\n"  << T_mi_var->value().vec() << std::endl;
+        std::cout<< "[GRAVITY INIT DEBUG] T_mi:\n" << T_mi_var->value().matrix() << std::endl;
+        std::cout << "[GRAVITY INIT DEBUG] T_mi_var:\n"  << T_mi_var->value().vec() << std::endl;
         // [ADDED DEBUG] Check if the result of the optimization is valid
         if (!T_mi_var->value().vec().allFinite()) {
-            std::cout << "--- [GRAVITY DEBUG] CRITICAL: Solver produced a non-finite (NaN or inf) result! ---" << std::endl;
+            std::cout << "[GRAVITY INIT DEBUG] CRITICAL: Solver produced a non-finite (NaN or inf) result!" << std::endl;
         } else {
-            std::cout << "--- [GRAVITY DEBUG] Solver finished, result is finite. ---" << std::endl;
+            std::cout << "[GRAVITY INIT DEBUG] Solver finished, result is finite." << std::endl;
         }
 #endif
         
@@ -1658,8 +1637,8 @@ namespace  stateestimate{
 
 #ifdef DEBUG
     // [DEBUG] Initial check at the start of the function
-    std::cout << "--- [ICP DEBUG | Frame " << index_frame << "] ---" << std::endl;
-    std::cout << "[ICP DEBUG] Starting with " << keypoints.size() << " keypoints." << std::endl;
+    std::cout << "[ICP DEBUG | Frame " << index_frame << "]" << std::endl;
+    std::cout << "[ICP DEBUG] Starting with " << keypoints.size() << " keypoints." <<  ", "<< imu_data_vec.size() << " IMU datas." <<  ", "<< pose_data_vec.size() << " pose datas." << std::endl;
 #endif
 
         // Step 1: Declare success flag for ICP
@@ -1752,16 +1731,6 @@ namespace  stateestimate{
         const auto prev_imu_biases_var = PREV_VAR.imu_biases; // IMU biases variable
         auto prev_T_mi_var = PREV_VAR.T_mi; // T_mi variable (non-const for updates)
 
-//         if (index_frame == 1) {
-// #ifdef DEBUG
-//             std::cout << "[ICP DEBUG] Frame 1: Locking initial state variables to improve stability." << std::endl;
-// #endif
-//             prev_T_rm_var->locked() = true;
-//             prev_w_mr_inr_var->locked() = true;
-//             prev_dw_mr_inr_var->locked() = true;
-//             prev_imu_biases_var->locked() = true;
-//         }
-
         // Step 13: Prepare ground truth IMU-to-map transformation (T_mi_gt)
         // xi_ig (assumed 6D vector) defines the ground truth T_mi (rotation + translation)
         // Zero translation to focus on rotation (common for IMU alignment)
@@ -1826,6 +1795,9 @@ namespace  stateestimate{
         // num_extra_states is how many extra points (knots) to add between PREV_TIME and curr_time
         // +1 includes the mandatory end state at curr_time
         const int NUM_STATES = options_.num_extra_states + 1;
+#ifdef DEBUG
+            std::cout << "[ICP DEBUG] Adding "<< NUM_STATES << " extra number of state between 2 original state." << std::endl;
+#endif
 
         // Step 19: Create timestamps (knot times) for new states
         // knot_times lists when each new state occurs, from PREV_TIME to curr_time
@@ -1867,10 +1839,10 @@ namespace  stateestimate{
         }
 
 #ifdef DEBUG
-    // [DEBUG] Check the initial pose prediction for NaNs
-    if (!T_NEXT_MAT.allFinite()) {
-        std::cout << "[ICP DEBUG] CRITICAL: Extrapolated pose T_NEXT_MAT is NOT finite!" << std::endl;
-    }
+        // [DEBUG] Check the initial pose prediction for NaNs
+        if (!T_NEXT_MAT.allFinite()) {
+            std::cout << "[ICP DEBUG] CRITICAL: Extrapolated pose T_NEXT_MAT is NOT finite!" << std::endl;
+        }
 #endif
 
         const math::se3::Transformation T_NEXT(Eigen::Matrix4d(T_NEXT_MAT.inverse()));
@@ -1897,9 +1869,6 @@ namespace  stateestimate{
             const auto w_mr_inr_var = finalicp::vspace::VSpaceStateVar<6>::MakeShared(prev_w_mr_inr); // Copy velocity
             const auto dw_mr_inr_var = finalicp::vspace::VSpaceStateVar<6>::MakeShared(prev_dw_mr_inr); // Copy acceleration
             const auto imu_biases_var = finalicp::vspace::VSpaceStateVar<6>::MakeShared(prev_imu_biases); // Copy biases
-
-            // LOG(INFO) << "init: w_mr_inr_var->value() " << w_mr_inr_var->value().transpose() << std::endl;
-            // LOG(INFO) << "init: dw_mr_inr_var->value() " << dw_mr_inr_var->value().transpose() << std::endl;
 
             // Add state to trajectory
             SLAM_TRAJ->add(knot_slam_time, T_rm_var, w_mr_inr_var, dw_mr_inr_var);
@@ -1937,11 +1906,14 @@ namespace  stateestimate{
         // Step 24: Add prior cost terms for the initial frame (index_frame == 1)
         // Priors set initial guesses for pose, velocity, and acceleration to guide optimization
         if (index_frame == 1) {
+#ifdef DEBUG
+            std::cout << "[ICP DEBUG] Adding a prior cost term for frame " << index_frame << std::endl;
+#endif
             // Get the previous frame’s state variables
             const auto& PREV_VAR = trajectory_vars_.at(prev_trajectory_var_index);
 
             // Define initial pose (T_rm, identity), velocity (w_mr_inr, zero), and acceleration (dw_mr_inr, zero)
-            math::se3::Transformation T_rm = math::se3::Transformation(options_.T_rm_init); // Identity transformation (no initial offset)
+            math::se3::Transformation T_rm; // Identity transformation (no initial offset)
             Eigen::Matrix<double, 6, 1> w_mr_inr = Eigen::Matrix<double, 6, 1>::Zero(); // Zero initial velocity
             Eigen::Matrix<double, 6, 1> dw_mr_inr = Eigen::Matrix<double, 6, 1>::Zero(); // Zero initial acceleration
 
@@ -1963,10 +1935,14 @@ namespace  stateestimate{
 
         // Step 25: Add IMU-related prior cost terms (if IMU is enabled)
         if (options_.use_imu) {
-
+#ifdef DEBUG
+            std::cout << "[ICP DEBUG] Defining IMU-Related prior cost term (If IMU is enabled)" std::endl;
+#endif
             // For the initial frame, add a prior for IMU biases
             if (index_frame == 1) {
-
+#ifdef DEBUG
+                std::cout << "[ICP DEBUG] Apply a prior on the IMU bias for initial frame " << index_frame << std::endl;
+#endif
                 // Get the previous frame’s state variables
                 const auto& PREV_VAR = trajectory_vars_.at(prev_trajectory_var_index);
 
@@ -1986,6 +1962,10 @@ namespace  stateestimate{
                 imu_prior_cost_terms.emplace_back(bias_prior_factor);
 
             } else if (options_.use_bias_prior_after_init) {  // For subsequent frames, add IMU bias prior if enabled
+#ifdef DEBUG
+                std::cout << "[ICP DEBUG] Apply a prior on the IMU bias for subsequent frame " << index_frame << std::endl;
+#endif
+                // controls whether to apply a prior on the IMU bias for all frames after the first one.
                 // Get the previous frame’s state variables
                 const auto& PREV_VAR = trajectory_vars_.at(prev_trajectory_var_index);
 
@@ -2007,6 +1987,7 @@ namespace  stateestimate{
 
             // For the initial frame, add a prior for T_mi if not using ground truth
             if (index_frame == 1 && !use_T_mi_gt) {
+ 
                 // Get the previous frame’s state variables
                 const auto& PREV_VAR = trajectory_vars_.at(prev_trajectory_var_index);
 
@@ -2017,16 +1998,16 @@ namespace  stateestimate{
                 // Use current T_mi as the prior guess
                 math::se3::Transformation T_mi = PREV_VAR.T_mi->value();
 
-                // LOG(INFO) << "T_mi(0)" << std::endl << T_mi.matrix() << std::endl;
-
                 // Create cost term to constrain initial T_mi
                 auto T_mi_error = finalicp::se3::se3_error(PREV_VAR.T_mi, T_mi);
                 auto noise_model = finalicp::StaticNoiseModel<6>::MakeShared(init_T_mi_cov);
                 auto loss_func = finalicp::L2LossFunc::MakeShared();
                 const auto T_mi_prior_factor = finalicp::WeightedLeastSqCostTerm<6>::MakeShared(T_mi_error, noise_model, loss_func);
                 T_mi_prior_cost_terms.emplace_back(T_mi_prior_factor);
+#ifdef DEBUG
+                std::cout << "[ICP DEBUG] Apply a prior T_mi cost term for initial frame " << index_frame << "as we are not using T_mi_gt" << std::endl;
+#endif 
             }
-
             // For subsequent frames, add T_mi prior if enabled and not using ground truth
             if (!options_.T_mi_init_only && !use_T_mi_gt && options_.use_T_mi_prior_after_init) {
                 // Get the previous frame’s state variables
@@ -2045,6 +2026,9 @@ namespace  stateestimate{
                 auto loss_func = finalicp::L2LossFunc::MakeShared();
                 const auto T_mi_prior_factor = finalicp::WeightedLeastSqCostTerm<6>::MakeShared(T_mi_error, noise_model, loss_func);
                 T_mi_prior_cost_terms.emplace_back(T_mi_prior_factor);
+#ifdef DEBUG
+                std::cout << "[ICP DEBUG] Apply a prior T_mi cost term for subsequent frame " << index_frame << "as we are not using T_mi_gt" << std::endl;
+#endif 
             }
         }
 
@@ -2065,10 +2049,14 @@ namespace  stateestimate{
             // Timer[5] measures the time taken to update the sliding window filter
 #ifdef DEBUG
             if (!timer.empty()) timer[5].second->start();
+            std::cout << "[ICP DEBUG] Update sliding window variables." << index_frame << std::endl;
 #endif
 
             // For the initial frame, include the previous frame’s state variables
             if (index_frame == 1) {
+#ifdef DEBUG
+                std::cout << "[ICP DEBUG] Apply a prior state variable on initial frame." << index_frame << std::endl;
+#endif
                 // Get the previous frame’s state variables
                 const auto& PREV_VAR = trajectory_vars_.at(prev_trajectory_var_index);
 
@@ -2077,8 +2065,14 @@ namespace  stateestimate{
 
                 // If IMU is enabled, add IMU biases and optionally T_mi
                 if (options_.use_imu) {
+#ifdef DEBUG
+                    std::cout << "[ICP DEBUG] Apply an IMU bias variable on initial frame " << index_frame << std::endl;
+#endif
                     sliding_window_filter_->addStateVariable(std::vector<finalicp::StateVarBase::Ptr>{PREV_VAR.imu_biases});
                     if (!use_T_mi_gt) {
+#ifdef DEBUG
+                        std::cout << "[ICP DEBUG] Apply a prior T_mi variable for initial frame " << index_frame << "as we are not using T_mi_gt" << std::endl;
+#endif
                         sliding_window_filter_->addStateVariable(std::vector<finalicp::StateVarBase::Ptr>{PREV_VAR.T_mi});
                     }
                 }
@@ -2105,11 +2099,9 @@ namespace  stateestimate{
         // Step 29: Marginalize old state variables to keep the sliding window manageable
         // Remove states older than delay_adding_points frames ago
         if (index_frame > options_.delay_adding_points && options_.delay_adding_points >= 0) {
-
 #ifdef DEBUG
             std::cout << "[ICP DEBUG] Condition (index_frame > delay_adding_points) met. Entering marginalization." << std::endl;
 #endif
-
             // Collect state variables to marginalize (from to_marginalize_ up to marg_time)
             std::vector<finalicp::StateVarBase::Ptr> marg_vars;
             size_t num_states = 0;
@@ -2125,14 +2117,12 @@ namespace  stateestimate{
                 if (VAR.time <= marg_slam_time) {
                     // Update end marginalization time
                     end_marg_time = VAR.time.seconds();
-
 #ifdef DEBUG
                         // Check if the variables are valid *before* marginalizing them
                         if(!VAR.T_rm->value().matrix().allFinite()) {
                            std::cout << "[ICP DEBUG] CRITICAL: VAR.T_rm at index " << i << " is NaN before marginalization!" << std::endl;
                         }
 #endif
-
                     // Add state variables to marginalize
                     marg_vars.emplace_back(VAR.T_rm);
                     marg_vars.emplace_back(VAR.w_mr_inr);
@@ -2150,7 +2140,6 @@ namespace  stateestimate{
                     break;
                 }
             }
-
             // Marginalize the collected variables if any
             if (!marg_vars.empty()) {
 #ifdef DEBUG
@@ -2162,25 +2151,20 @@ namespace  stateestimate{
 #ifdef DEBUG
                 std::cout << std::fixed << std::setprecision(12) 
                 << "[ICP DEBUG] Marginalizing time: " << begin_marg_time - end_marg_time << ", with num states: " << num_states << std::endl;
-                std::cout << "[MARG DEBUG] Finished marginalization call." << std::endl;
-                std::cout << "--- [END MARG DEBUG] ---" << std::endl;
+                std::cout << "[ICP DEBUG] Finished marginalization call." << std::endl;
 #endif
             }
-
             // Step 30: Stop the marginalization timer
 #ifdef DEBUG
             if (!timer.empty()) timer[5].second->stop();
 #endif
-
         }
-
         ///################################################################################
         // Step 31: Restart the initialization timer for query point evaluation
         // Timer[4] measures the time taken to process query points and IMU cost terms
 #ifdef DEBUG
         if (!timer.empty()) timer[4].second->start();
 #endif
-
         // Step 32: Collect unique timestamps from keypoints for query point evaluation
         // unique_point_times lists distinct timestamps to query the SLAM trajectory
         std::set<double> unique_point_times_set;
@@ -2188,9 +2172,11 @@ namespace  stateestimate{
             unique_point_times_set.insert(keypoint.timestamp);
         }
         std::vector<double> unique_point_times(unique_point_times_set.begin(), unique_point_times_set.end());
-
+#ifdef DEBUG
+        std::cout << "[ICP DEBUG] Found " << unique_point_times.size() << " unique timestamps in the point cloud." << std::endl;
+#endif
         // Configure IMU cost term options
-        finalicp::IMUSuperCostTerm::Options imu_options;
+        auto imu_options = finalicp::IMUSuperCostTerm::Options();
         imu_options.num_threads = options_.num_threads; // Thread count (sequential here, but set for compatibility)
         imu_options.acc_loss_sigma = options_.acc_loss_sigma; // Accelerometer loss parameter
         imu_options.use_accel = options_.use_accel; // Whether to use acceleration data
@@ -2218,111 +2204,117 @@ namespace  stateestimate{
         // Step 33: Add IMU cost terms (if IMU is enabled)
         // IMU cost terms constrain the trajectory using accelerometer and gyroscope measurements
         if (options_.use_imu) {
+#ifdef DEBUG
+            std::cout << "[ICP DEBUG] Adding IMU Measurement Cost Terms (if IMU is enabled)." << std::endl;
+#endif
+            // Create individual IMU cost terms for each measurement
+            imu_cost_terms.reserve(imu_data_vec.size()); // Reserve 
+            Eigen::Matrix<double, 3, 3> R_acc = Eigen::Matrix<double, 3, 3>::Identity();
+            R_acc.diagonal() = options_.r_imu_acc;
+            Eigen::Matrix<double, 3, 3> R_ang = Eigen::Matrix<double, 3, 3>::Identity();
+            R_ang.diagonal() = options_.r_imu_ang;
+            const auto acc_noise_model = finalicp::StaticNoiseModel<3>::MakeShared(R_acc);
+            const auto gyro_noise_model = finalicp::StaticNoiseModel<3>::MakeShared(R_ang);
+            const auto acc_loss_func = finalicp::CauchyLossFunc::MakeShared(1.0);
+            const auto gyro_loss_func = finalicp::L2LossFunc::MakeShared();
 
-#if false
-                imu_super_cost_term->set(imu_data_vec);
-                imu_super_cost_term->init();
-#else
-
-                // Create individual IMU cost terms for each measurement
-                imu_cost_terms.reserve(imu_data_vec.size()); // Reserve 
-                Eigen::Matrix<double, 3, 3> R_acc = Eigen::Matrix<double, 3, 3>::Identity();
-                R_acc.diagonal() = options_.r_imu_acc;
-                Eigen::Matrix<double, 3, 3> R_ang = Eigen::Matrix<double, 3, 3>::Identity();
-                R_ang.diagonal() = options_.r_imu_ang;
-                const auto acc_noise_model = finalicp::StaticNoiseModel<3>::MakeShared(R_acc);
-                const auto gyro_noise_model = finalicp::StaticNoiseModel<3>::MakeShared(R_ang);
-                const auto acc_loss_func = finalicp::CauchyLossFunc::MakeShared(1.0);
-                const auto gyro_loss_func = finalicp::L2LossFunc::MakeShared();
-
-                for (const auto& imu_data : imu_data_vec) {
-                    // Find the knot interval containing the IMU timestamp
-                    size_t i = prev_trajectory_var_index;
-                    for (; i < trajectory_vars_.size() - 1; i++) {
-                        if (imu_data.timestamp >= trajectory_vars_[i].time.seconds() && imu_data.timestamp < trajectory_vars_[i + 1].time.seconds()) {
-                            break;
-                        }
+            for (const auto& imu_data : imu_data_vec) {
+                // Find the knot interval containing the IMU timestamp
+                size_t i = prev_trajectory_var_index;
+                for (; i < trajectory_vars_.size() - 1; i++) {
+                    if (imu_data.timestamp >= trajectory_vars_[i].time.seconds() && imu_data.timestamp < trajectory_vars_[i + 1].time.seconds()) {
+                        break;
                     }
-                    if (imu_data.timestamp < trajectory_vars_[i].time.seconds() || imu_data.timestamp >= trajectory_vars_[i + 1].time.seconds()) {
-                        throw std::runtime_error("IMU timestamp not within knot times: " + std::to_string(imu_data.timestamp));
-                    }
+                }
+                if (imu_data.timestamp < trajectory_vars_[i].time.seconds() || imu_data.timestamp >= trajectory_vars_[i + 1].time.seconds()) {
+                    throw std::runtime_error("IMU timestamp not within knot times: " + std::to_string(imu_data.timestamp));
+                }
 
-                    // Interpolate IMU biases between knots
-                    const auto bias_intp_eval = finalicp::vspace::VSpaceInterpolator<6>::MakeShared(
-                        finalicp::traj::Time(imu_data.timestamp), trajectory_vars_[i].imu_biases, trajectory_vars_[i].time,
-                        trajectory_vars_[i + 1].imu_biases, trajectory_vars_[i + 1].time
-                    );
-
-                    // Interpolate pose, velocity, and acceleration
-                    const auto T_rm_intp_eval = SLAM_TRAJ->getPoseInterpolator(finalicp::traj::Time(imu_data.timestamp));
-                    const auto w_mr_inr_intp_eval = SLAM_TRAJ->getVelocityInterpolator(finalicp::traj::Time(imu_data.timestamp));
-                    const auto dw_mr_inr_intp_eval = SLAM_TRAJ->getAccelerationInterpolator(finalicp::traj::Time(imu_data.timestamp));
-
-                    // Create acceleration error term
-                    const auto acc_error_func = [&]() -> finalicp::imu::AccelerationErrorEvaluator::Ptr {
-                        if (options_.T_mi_init_only) {
-                            // Use fixed T_mi for initial frame
-                            return finalicp::imu::AccelerationError(T_rm_intp_eval, dw_mr_inr_intp_eval, bias_intp_eval, trajectory_vars_[i].T_mi, imu_data.lin_acc);
-                        } else {
-                            // Interpolate T_mi between knots
-                            const auto T_mi_intp_eval = finalicp::se3::PoseInterpolator::MakeShared(
-                                finalicp::traj::Time(imu_data.timestamp), trajectory_vars_[i].T_mi, trajectory_vars_[i].time,
-                                trajectory_vars_[i + 1].T_mi, trajectory_vars_[i + 1].time
-                            );
-                            return finalicp::imu::AccelerationError(T_rm_intp_eval, dw_mr_inr_intp_eval, bias_intp_eval, T_mi_intp_eval, imu_data.lin_acc);
-                        }
-                    }();
-
-                    // Set gravity and timestamp for acceleration error
-                    acc_error_func->setGravity(options_.gravity);
-                    acc_error_func->setTime(finalicp::traj::Time(imu_data.timestamp));
-
-                    // Create gyroscope error term
-                    const auto gyro_error_func = finalicp::imu::GyroError(w_mr_inr_intp_eval, bias_intp_eval, imu_data.ang_vel);
-                    gyro_error_func->setTime(finalicp::traj::Time(imu_data.timestamp));
-
-                    // Add acceleration cost term (if enabled)
-                    if (options_.use_accel) {
-                        const auto acc_cost = finalicp::WeightedLeastSqCostTerm<3>::MakeShared(acc_error_func, acc_noise_model, acc_loss_func);
-                        imu_cost_terms.emplace_back(acc_cost);
-                    }
-
-                    // Add gyroscope cost term
-                    const auto gyro_cost = finalicp::WeightedLeastSqCostTerm<3>::MakeShared(gyro_error_func, gyro_noise_model, gyro_loss_func);
-                    imu_cost_terms.emplace_back(gyro_cost);
+#ifdef DEBUG
+                if (imu_factors_added == 0) { // Print for the first IMU data point only to avoid spam
+                    std::cout << "[ICP DEBUG]   - IMU data at timestamp " << std::fixed << imu_data.timestamp
+                            << " falls between knot " << i << " (" << trajectory_vars_[i].time.seconds()
+                            << "s) and knot " << i + 1 << " (" << trajectory_vars_[i + 1].time.seconds() << "s)." << std::endl;
                 }
 #endif
+
+                // Interpolate IMU biases between knots
+                const auto bias_intp_eval = finalicp::vspace::VSpaceInterpolator<6>::MakeShared(
+                    finalicp::traj::Time(imu_data.timestamp), trajectory_vars_[i].imu_biases, trajectory_vars_[i].time,
+                    trajectory_vars_[i + 1].imu_biases, trajectory_vars_[i + 1].time
+                );
+
+                // Interpolate pose, velocity, and acceleration
+                const auto T_rm_intp_eval = SLAM_TRAJ->getPoseInterpolator(finalicp::traj::Time(imu_data.timestamp));
+                const auto w_mr_inr_intp_eval = SLAM_TRAJ->getVelocityInterpolator(finalicp::traj::Time(imu_data.timestamp));
+                const auto dw_mr_inr_intp_eval = SLAM_TRAJ->getAccelerationInterpolator(finalicp::traj::Time(imu_data.timestamp));
+
+                // Create acceleration error term
+                const auto acc_error_func = [&]() -> finalicp::imu::AccelerationErrorEvaluator::Ptr {
+                    if (options_.T_mi_init_only) {
+                        // Use fixed T_mi for initial frame
+                        return finalicp::imu::AccelerationError(T_rm_intp_eval, dw_mr_inr_intp_eval, bias_intp_eval, trajectory_vars_[i].T_mi, imu_data.lin_acc);
+                    } else {
+                        // Interpolate T_mi between knots
+                        const auto T_mi_intp_eval = finalicp::se3::PoseInterpolator::MakeShared(
+                            finalicp::traj::Time(imu_data.timestamp), trajectory_vars_[i].T_mi, trajectory_vars_[i].time,
+                            trajectory_vars_[i + 1].T_mi, trajectory_vars_[i + 1].time
+                        );
+                        return finalicp::imu::AccelerationError(T_rm_intp_eval, dw_mr_inr_intp_eval, bias_intp_eval, T_mi_intp_eval, imu_data.lin_acc);
+                    }
+                }();
+
+                // Set gravity and timestamp for acceleration error
+                acc_error_func->setGravity(options_.gravity);
+                acc_error_func->setTime(finalicp::traj::Time(imu_data.timestamp));
+
+                // Create gyroscope error term
+                const auto gyro_error_func = finalicp::imu::GyroError(w_mr_inr_intp_eval, bias_intp_eval, imu_data.ang_vel);
+                gyro_error_func->setTime(finalicp::traj::Time(imu_data.timestamp));
+
+                // Add acceleration cost term (if enabled)
+                if (options_.use_accel) {
+                    const auto acc_cost = finalicp::WeightedLeastSqCostTerm<3>::MakeShared(acc_error_func, acc_noise_model, acc_loss_func);
+                    imu_cost_terms.emplace_back(acc_cost);
+                }
+
+                // Add gyroscope cost term
+                const auto gyro_cost = finalicp::WeightedLeastSqCostTerm<3>::MakeShared(gyro_error_func, gyro_noise_model, gyro_loss_func);
+                imu_cost_terms.emplace_back(gyro_cost);
+            }
 
             // Step 34: Add prior cost terms for IMU biases
             // Constrain changes in IMU biases between consecutive states
             // Get IMU prior cost terms
-            {
-                // Set covariance for IMU bias prior
-                Eigen::Matrix<double, 6, 6> bias_cov = Eigen::Matrix<double, 6, 6>::Identity();
-                bias_cov.block<3, 3>(0, 0).diagonal() =  options_.q_bias_accel; // Accelerometer bias covariance
-                bias_cov.block<3, 3>(3, 3) = Eigen::Matrix<double, 3, 3>::Identity() * options_.q_bias_gyro; // Gyroscope bias covariance
+            
+            // Set covariance for IMU bias prior
+            Eigen::Matrix<double, 6, 6> bias_cov = Eigen::Matrix<double, 6, 6>::Identity();
+            bias_cov.block<3, 3>(0, 0).diagonal() =  options_.q_bias_accel; // Accelerometer bias covariance
+            bias_cov.block<3, 3>(3, 3) = Eigen::Matrix<double, 3, 3>::Identity() * options_.q_bias_gyro; // Gyroscope bias covariance
 
-                // Create noise model and loss function for bias prior
-                auto noise_model = finalicp::StaticNoiseModel<6>::MakeShared(bias_cov);
-                auto loss_func = finalicp::L2LossFunc::MakeShared();
+            // Create noise model and loss function for bias prior
+            auto noise_model = finalicp::StaticNoiseModel<6>::MakeShared(bias_cov);
+            auto loss_func = finalicp::L2LossFunc::MakeShared();
 
-                // Add prior for each pair of consecutive states
-                size_t i = prev_trajectory_var_index;
-                for (; i < trajectory_vars_.size() - 1; i++) {
-                    // Create error term: difference between consecutive biases
-                    const auto nbk = finalicp::vspace::NegationEvaluator<6>::MakeShared(trajectory_vars_[i + 1].imu_biases);
-                    auto bias_error = finalicp::vspace::AdditionEvaluator<6>::MakeShared(trajectory_vars_[i].imu_biases, nbk);
+            // Add prior for each pair of consecutive states
+            size_t i = prev_trajectory_var_index;
+            for (; i < trajectory_vars_.size() - 1; i++) {
+                // Create error term: difference between consecutive biases
+                const auto nbk = finalicp::vspace::NegationEvaluator<6>::MakeShared(trajectory_vars_[i + 1].imu_biases);
+                auto bias_error = finalicp::vspace::AdditionEvaluator<6>::MakeShared(trajectory_vars_[i].imu_biases, nbk);
 
-                    // Create and add prior cost term
-                    const auto bias_prior_factor = finalicp::WeightedLeastSqCostTerm<6>::MakeShared(bias_error, noise_model, loss_func);
-                    imu_prior_cost_terms.emplace_back(bias_prior_factor);
-                }
+                // Create and add prior cost term
+                const auto bias_prior_factor = finalicp::WeightedLeastSqCostTerm<6>::MakeShared(bias_error, noise_model, loss_func);
+                imu_prior_cost_terms.emplace_back(bias_prior_factor);
             }
-
+            
             // Step 35: Add prior cost terms for T_mi (if not init-only and not using ground truth)
             // Constrain changes in T_mi between consecutive states
             // Get T_mi prior cost terms
             if (!options_.T_mi_init_only && !use_T_mi_gt) {
+#ifdef DEBUG
+                std::cout << "[ICP DEBUG] Apply a prior cost term for T_mi term for initial frame " << index_frame << "as we are not using ground truth and not init only." << std::endl;
+#endif 
                 // Define identity T_mi as the prior guess (no relative change)
                 const auto T_mi = math::se3::Transformation();
 
@@ -2627,18 +2619,6 @@ namespace  stateestimate{
             swf_inside_icp = true; // Use sliding window filter after initial frames
         }
 
-        // ##################################################################
-        // ### BUG FIX: ADD THIS CALL RIGHT HERE ###
-        // ##################################################################
-        // This is the crucial first transformation. It moves the keypoints from
-        // the sensor's local frame into the world frame based on your initial motion guess.
-        // Without this, the first search for neighbors will fail.
-#ifdef DEBUG
-        if (index_frame == 1){
-            std::cout << "[ICP DEBUG] Performing initial keypoint transformation before ICP loop." << std::endl;}
-#endif
-        if (index_frame == 1){transform_keypoints();}
-
         // ################################################################################
         // Step 43: Start ICP optimization loop ################################################################################
         // ################################################################################
@@ -2723,10 +2703,10 @@ namespace  stateestimate{
 #ifdef DEBUG
                     if (i == 0) {
                         std::cout << "[ICP DEBUG] Association for point 0:" << std::endl;
-                        std::cout << "  - Point coordinate: " << pt_keypoint.transpose() << std::endl;
-                        std::cout << "  - Neighbors found: " << vector_neighbors.size() << std::endl;
-                        std::cout << "  - Neighborhood a2D: " << neighborhood.a2D << std::endl;
-                        std::cout << "  - Dist to plane: " << dist_to_plane << std::endl;
+                        std::cout << "[ICP DEBUG] Point coordinate: " << pt_keypoint.transpose() << std::endl;
+                        std::cout << "[ICP DEBUG] Neighbors found: " << vector_neighbors.size() << std::endl;
+                        std::cout << "[ICP DEBUG] Neighborhood a2D: " << neighborhood.a2D << std::endl;
+                        std::cout << "[ICP DEBUG] Dist to plane: " << dist_to_plane << std::endl;
                         if (!std::isfinite(neighborhood.a2D) || !std::isfinite(dist_to_plane)) {
                             std::cout << "[ICP DEBUG] CRITICAL: NaN detected in neighborhood/distance calculation!" << std::endl;
                         }
@@ -2938,12 +2918,12 @@ namespace  stateestimate{
             // Computes differences in pose, velocity, and acceleration to determine if converged
 #ifdef DEBUG
             timer[3].second->start(); // Start alignment timer
-            std::cout << "[ICP DEBUG] --- Updating State & Checking Convergence ---" << std::endl;
+            std::cout << "[ICP DEBUG] Updating State & Checking Convergence" << std::endl;
 #endif
 
 #ifdef DEBUG
             // [ADDED DEBUG] Header for this block to show the current iteration
-            std::cout << "[ICP DEBUG] --- Updating State & Checking Convergence (Iteration " << iter << ") ---" << std::endl;
+            std::cout << "[ICP DEBUG] Updating State & Checking Convergence (Iteration " << iter << ")" << std::endl;
 #endif
 
             double diff_trans = 0.0, diff_rot = 0.0, diff_vel = 0.0, diff_acc = 0.0;
@@ -3028,7 +3008,7 @@ namespace  stateestimate{
 
 
             // Check convergence
-            if ((index_frame >= 1) &&
+            if ((index_frame > 1) &&
                 (diff_rot < options_.threshold_orientation_norm &&
                 diff_trans < options_.threshold_translation_norm &&
                 diff_vel < options_.threshold_translation_norm * 10.0 + options_.threshold_orientation_norm * 10.0 &&
@@ -3168,9 +3148,9 @@ namespace  stateestimate{
             const auto bias_intp_eval = finalicp::vspace::VSpaceInterpolator<6>::MakeShared(curr_mid_slam_time, trajectory_vars_[i].imu_biases, trajectory_vars_[i].time, trajectory_vars_[i + 1].imu_biases, trajectory_vars_[i + 1].time);
             current_estimate.mid_b = bias_intp_eval->value();
 #ifdef DEBUG
-            std::cout << "mid_T_mi: " << current_estimate.mid_T_mi << std::endl;
-            std::cout << "b_begin: " << trajectory_vars_[i].imu_biases->value().transpose() << std::endl;
-            std::cout << "b_end: " << trajectory_vars_[i + 1].imu_biases->value().transpose() << std::endl;
+            std::cout << "[ICP DEBUG] mid_T_mi: " << current_estimate.mid_T_mi << std::endl;
+            std::cout << "[ICP DEBUG] b_begin: " << trajectory_vars_[i].imu_biases->value().transpose() << std::endl;
+            std::cout << "[ICP DEBUG] b_end: " << trajectory_vars_[i + 1].imu_biases->value().transpose() << std::endl;
 #endif
         }
 
@@ -3178,14 +3158,14 @@ namespace  stateestimate{
         // Ensures keypoints, velocities, and accelerations are valid
 #ifdef DEBUG
         std::cout << "[ICP DEBUG] ESTIMATED PARAMETER" << std::endl;
-        std::cout << "Number of keypoints used in CT-ICP : " << N_matches << std::endl;
-        std::cout << "v_begin: " << v_begin.transpose() << std::endl;
-        std::cout << "v_end: " << v_end.transpose() << std::endl;
-        std::cout << "a_begin: " << a_begin.transpose() << std::endl;
-        std::cout << "a_end: " << a_end.transpose() << std::endl;
-        std::cout << "Number iterations CT-ICP : " << options_.num_iters_icp << std::endl;
-        std::cout << "Translation Begin: " << trajectory_[index_frame].begin_t.transpose() << std::endl;
-        std::cout << "Translation End: " << trajectory_[index_frame].end_t.transpose() << std::endl;
+        std::cout << "[ICP DEBUG] Number of keypoints used in CT-ICP : " << N_matches << std::endl;
+        std::cout << "[ICP DEBUG] v_begin: " << v_begin.transpose() << std::endl;
+        std::cout << "[ICP DEBUG] v_end: " << v_end.transpose() << std::endl;
+        std::cout << "[ICP DEBUG] a_begin: " << a_begin.transpose() << std::endl;
+        std::cout << "[ICP DEBUG] a_end: " << a_end.transpose() << std::endl;
+        std::cout << "[ICP DEBUG] Number iterations CT-ICP : " << options_.num_iters_icp << std::endl;
+        std::cout << "[ICP DEBUG] Translation Begin: " << trajectory_[index_frame].begin_t.transpose() << std::endl;
+        std::cout << "[ICP DEBUG] Translation End: " << trajectory_[index_frame].end_t.transpose() << std::endl;
 #endif
 
 #ifdef DEBUG
@@ -3195,7 +3175,6 @@ namespace  stateestimate{
         }
         // [DEBUG] Final status report before returning
         std::cout << "[ICP DEBUG] Finished ICP for frame " << index_frame << ". Success: " << (icp_success ? "true" : "false") << std::endl;
-        std::cout << "--- [END ICP DEBUG | Frame " << index_frame << "] ---\n" << std::endl;
 #endif
 
         // Step 55: Return success status

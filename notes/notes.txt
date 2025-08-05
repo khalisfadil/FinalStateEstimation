@@ -126,3 +126,12 @@ Freitag, 25. Juli 2025 12:12
     - I have been advice to isolate my cost term which maybe wrong.
     - testing remove the IMU factor to check convergence
     - removing the IMU factor create back the ill condition, thus I revoke changes and the icp iterate until iteration 9 before failling.
+--------------------------------------------------------------------------------------------------------------------------
+Montag, 4. August 2025 15:27
+    - why no IMU factor
+    - revert back to initial odom as identity
+    - I will redo the lidar measurement to fixed as sensor measurement and not vehicle measurement.
+    - Trajectory lidarinertialodom::trajectory() it calcualte T_ms
+    - in update map also has transformation sensor to robot
+    - at line 1915. TODO; to find the smoking gun on why no IMU data.
+    - 
