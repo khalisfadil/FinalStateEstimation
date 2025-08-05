@@ -3182,10 +3182,10 @@ namespace  stateestimate{
         params.verbose = options_.verbose;
         params.max_iterations = static_cast<unsigned int>(options_.max_iterations);
         finalicp::GaussNewtonSolverNVA solver(*sliding_window_filter_, params);
-        // if (!swf_inside_icp) {
-        //     solver.optimize(); // Optimize the sliding window filter if not done in ICP loop
-        // }
-        solver.optimize(); // Optimize the sliding window filter if not done in ICP loop
+        if (!swf_inside_icp) {
+            solver.optimize(); // Optimize the sliding window filter if not done in ICP loop
+        }
+        // solver.optimize(); // Optimize the sliding window filter if not done in ICP loop
 
         // Step 51: Lock T_mi variables (if applicable)
         // Ensures consistent IMU-to-map transformations for future variables
