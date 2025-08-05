@@ -3217,11 +3217,11 @@ namespace  stateestimate{
         current_estimate.mid_T_mi = trajectory_vars_[prev_trajectory_var_index].T_mi->value().matrix();
          // ADD THIS LINE
 
-        finalicp::Covariance covariance(solver);
-#ifdef DEBUG
-        std::cout << "[ICP DEBUG] SLAM_TRAJ: getCovariance." << std::endl;
-#endif
-        current_estimate.mid_state_cov = SLAM_TRAJ->getCovariance(covariance, trajectory_vars_[prev_trajectory_var_index].time);
+//         finalicp::Covariance covariance(solver);
+// #ifdef DEBUG
+//         std::cout << "[ICP DEBUG] SLAM_TRAJ: getCovariance." << std::endl;
+// #endif
+//         current_estimate.mid_state_cov = SLAM_TRAJ->getCovariance(covariance, trajectory_vars_[prev_trajectory_var_index].time);
 
         // Update begin and end poses
         current_estimate.begin_R = curr_begin_T_ms.block<3, 3>(0, 0);
