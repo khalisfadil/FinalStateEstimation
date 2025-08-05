@@ -2232,7 +2232,7 @@ namespace  stateestimate{
                 }
 
 #ifdef DEBUG
-                    std::cout << "[ICP DEBUG] IMU Data: " << std::setprecision(4) << imu.timestamp << " " << imu.ang_vel.transpose() << " " << imu.lin_acc.transpose() << std::endl;
+                    std::cout << "[ICP DEBUG] IMU Data: " << std::setprecision(4) << imu_data.timestamp << " " << imu_data.ang_vel.transpose() << " " << imu_data.lin_acc.transpose() << std::endl;
 #endif
 
                 // Interpolate IMU biases between knots
