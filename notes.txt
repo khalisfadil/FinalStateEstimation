@@ -1,0 +1,137 @@
+Mittwoch, 2. Juli 2025 16:05
+    - does keypoints and const_frame is different?
+    - grid sampling provide initialized frame and keypoints.
+    - initializeFrame has sub_sample_frame >> output >> downsampling of given input frame.
+    - grid_sampling, copy the input frame and do sub_sample_frame, move(transform) downsampled frame into keypoints.
+    - NOTE: grid_sampling can be optimized. redundancies operations.
+    - initializeFrame has undo the motion distortion. it does shuffling of the points inside its frame.
+    - keypoints is a frame that has undergoes second downsampling operations.
+    - keypoints has undergoes motion undistortion. timestamp change? lookslike it retain its original timestamp
+    - TODO: dataalingment, make sure the IMU data is inside the lidar frame.
+    - I have calculated that every lidar frame, we have maximum of 5 IMU measurement.
+    - stop at step 34 in icp.
+--------------------------------------------------------------------------------------------------------------------------
+Donnerstag, 3. Juli 2025 08:56
+    - start from step 37 I remove runtime error to ease the code.
+    - stopped at step 45
+--------------------------------------------------------------------------------------------------------------------------
+Montag, 7. Juli 2025 12:06
+    - finished checking function icp
+    - added glog in icp
+    - finished recheck all function in lidarinertialodometry
+--------------------------------------------------------------------------------------------------------------------------
+Montag, 14. Juli 2025 13:58
+    - I have add subsampling outlier removal inside grid sampling. so that it will remove outlier.
+    - in the "register frame" the lidar point undergoes initialize frame without subsampling removal. then go grid sampling withoutlier removal.
+    - we can change this vice versa if we think its not working.
+    - build all slamming is working on target 7.
+    - TODO: complete the slamming pipeline
+    - for map, I have take a look many times and it is not possible to apply tbb parallel on it. until now we stay with tsl-robin.
+--------------------------------------------------------------------------------------------------------------------------
+Dienstag, 15. Juli 2025 11:08
+    - I check the main.cpp from steam_icp
+    - > options.odometry_options = SteamLioOdometry --line195
+    - ROS2_PARAM_CLAUSE is initialize as my json file
+    - auto &steam_icp_options = dynamic_cast<SteamLioOdometry::Options &>(odometry_options);
+    - tsl::robin_map supports concurrent reads but not writes without synchronization
+    - I have update map.hpp to potential a better and safer version.
+--------------------------------------------------------------------------------------------------------------------------
+Mittwoch, 16. Juli 2025 09:41
+    - add trajectory.hpp with brief comment
+    - going back to Transformation understanding
+    - Tworld,new​=Tworld,old​ * Trelative, where Trelative define from LLA2NED and RPY of the compass.
+    - LLA2NED, the NED is relative translation
+    - I have been adviced to remove the global control on each of my tbb function especially in finalstateestimation. will do tomorrow.
+--------------------------------------------------------------------------------------------------------------------------
+Montag, 21. Juli 2025 10:04
+    - I have double check the map.hpp until today there is not bug that I can found. expected map.hpp to works okay.
+    - "Hey, if anyone ever asks for the string "SLAM_LIDAR_INERTIAL_ODOM", you should use the constructor for the lidarinertialodom class to create the object they want."
+    - Phase 1: The Setup (Automatic Program Startup)
+        - This phase prepares the system.
+        - Registration: Inside the lidarinertialodom.hpp file, the SLAM_REGISTER_ODOMETRY macro creates a special static helper object.
+        - Auto-Run: Because this object is static, its constructor (OdometryRegister()) runs automatically when the program launches.
+        - Populate the "Menu": This constructor adds an entry to a central, hidden static map inside the Odometry class. The entry consists of:
+        - The Key: The string "SLAM_LIDAR_INERTIAL_ODOM".
+        - The Value: A "recipe" (a C++ lambda) for how to create a lidarinertialodom object.
+    - At the end of this phase, the system knows that "SLAM_LIDAR_INERTIAL_ODOM" exists, but no lidarinertialodom object has actually been created yet.
+    - Phase 2: The Action (When Get is Called)
+        - This phase happens when your SLAMPipeline code runs.
+        - The Request: Your code calls Odometry::Get("SLAM_LIDAR_INERTIAL_ODOM", json_path).
+        - Lookup: The Get function looks up the string "SLAM_LIDAR_INERTIAL_ODOM" in the central map and finds the "recipe" that was registered in Phase 1.
+        - Execution: The Get function executes the recipe, handing it the json_path string.
+        - Creation: The recipe's only instruction is to call std::make_shared<lidarinertialodom>(json_path). This is the moment the lidarinertialodom object is finally constructed. Its constructor uses the json_path to load all its settings from the file.
+        - Return: A pointer to the new, fully-configured lidarinertialodom object is returned to the SLAMPipeline.
+    - learn about how virtual and override function work and use it in setInitialPose. polymorphism
+    - the hash technique in voxel.hpp redefined
+    - alot of bug identified. tomorrow I want to build inside target7 and potentially run with data. as the pipeline maybe finished.
+--------------------------------------------------------------------------------------------------------------------------
+Mittwoch, 23. Juli 2025 10:32
+    - lidar raw give measurement timestamp in nanosecond
+    - in lidar decode we convert it into sec
+    - in lidarinertialodometry.hpp, in intializetimestamp, the begin and end of the index of current frame is define from the lidar data which is timed in second.
+    - there is a small detail where if traj::time take value in double, its know that is in second.
+    - I need to check the locking mechanism in finalicp
+    - between log and gt, there is time delay like 4 frame for gt. its okay.
+    - alot of confussion because the of the transformation T_target_source(use by ROS) or T_source_target. I think I learn before is the old mehtod which use T_source_target.
+    - so I will stay with T_target_source because modern method use that.
+    - Cb2n function creates a matrix that transforms a vector from the body (robot) frame to the navigation (map) frame.
+    - defines the pose of a sensor s in the world frame e (ENU) as T_es. T_target_source. target frame, source of point.
+    - If the input LLA is the position of the robot, the output NED vector is the translation component of Tmr (T_map_robot). It represents the robot's position within the map frame.
+--------------------------------------------------------------------------------------------------------------------------
+Donnerstag, 24. Juli 2025 10:14
+    - T_target_souce mean target is "change frame into" and source mean "change frame from". 
+    - T_rm "change frame from map into robot". T_mr "change frame from robot into map".
+    - TODO in initialized motion, the first frame should be initialized with Tmr
+    - "registration summary" contain R_ms and t_ms
+    - trajectory_ use T_ms // equivalent to T_mr
+    - auto &current_estimate = trajectory_.at(index_frame); is a pointer to the trajectory_
+    - which take current_estimate.begin_t = begin_T_ms.block<3, 1>(0, 3); // Begin translation
+    - and current_estimate.begin_R = begin_T_ms.block<3, 3>(0, 0); // Begin rotation
+    - Question! why use T_rm??
+    - T_rm is part of TrajectoryVar
+    - trajectory_vars_
+        - Internal state for the optimizer. These are the variables the SLAM backend adjusts to find the best solution.
+        - Continuous. It's a set of "knots" (pose, velocity, acceleration at specific times) that define a smooth, continuous trajectory.
+        - Pointers to StateVar objects (SE3StateVar, VSpaceStateVar). These are nodes in the optimization graph.
+        - Stores the pose of the robot in the map (Trm​).
+        - It's the input to the optimization problem. The icp function builds a trajectory from these variables to solve for the best motion.
+    - trajectory_
+        - User-facing output. This is the final result of the odometry that other parts of a system would use.
+        - Discrete. It's a sequence of Frame objects, each representing a distinct time interval (a single LiDAR scan).
+        - Concrete values (Eigen::Matrix3d, Eigen::Vector3d) and the raw Point3D data for each frame.
+        - Stores the pose of the sensor in the map (Tms​).
+        - It's primarily the output of the system. Its values are derived from the final optimized trajectory_vars_.
+    - SLAM_TRAJ
+        - The Blueprint 📝. It's a mathematical model that defines how pose, velocity, and acceleration are related over time.
+        - Local & Temporary. It is created at the beginning of each icp call and destroyed at the end.
+        - Interpolation & Constraint Generation. Its main jobs are to provide interpolated poses at any time t and to generate the motion model cost terms that link the state variables together.
+        - A set of mathematical equations describing a smooth curve.
+    - sliding_window_filter_
+        - The Problem Manager 🏗️. It holds the complete factor graph (all state variables and constraints) for the current window of frames.
+        - Persistent & Global. It's a class member that lives for the entire duration of the odometry process, evolving as new frames are added and old ones are removed.
+        - State & Constraint Management. Its main jobs are to addStateVariable, addCostTerm, and, crucially, to marginalizeVariable (remove old states while preserving their information).
+        - A database that stores all the control points and rules that the final curve must adhere to.
+        - initialize at lidar intertial odom and first called at icp line ~1966
+    - Define the marginalization time based on delay_adding_points
+        - const double marg_time = trajectory_.at(index_frame - options_.delay_adding_points - 1).end_timestamp;
+    - I don't want to be so exited, but today, I know the problem due to marginalization. as I increase the delay point the program does not crash. 
+    - I also don't want to give high hope but the rmse value is very low.
+    - thats for today alhamdulillah!
+    - there is an ill condition
+--------------------------------------------------------------------------------------------------------------------------
+Freitag, 25. Juli 2025 12:12
+    - paper idea: ""Performance Comparison of Single Merged LiDAR Factor versus Multiple Individual LiDAR Factors in LiDAR-Inertial Factor Graph Optimization for Marine Vehicle SLAM"  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    - I think I need to create the vizualization algo for my slam pipeline to check if the transformed Lidar data and the IMU is exactly as what I intend it todo.
+    - the problem come from the optimization process.gauss newton GaussNewtonSolverNVA
+    - I have been advice to isolate my cost term which maybe wrong.
+    - testing remove the IMU factor to check convergence
+    - removing the IMU factor create back the ill condition, thus I revoke changes and the icp iterate until iteration 9 before failling.
+--------------------------------------------------------------------------------------------------------------------------
+Montag, 4. August 2025 15:27
+    - why no IMU factor
+    - revert back to initial odom as identity
+    - I will redo the lidar measurement to fixed as sensor measurement and not vehicle measurement.
+    - Trajectory lidarinertialodom::trajectory() it calcualte T_ms
+    - in update map also has transformation sensor to robot
+    - at line 1915. TODO; to find the smoking gun on why no IMU data.
+    - 
