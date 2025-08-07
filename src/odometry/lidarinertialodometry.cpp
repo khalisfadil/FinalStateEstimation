@@ -2557,6 +2557,7 @@ namespace  stateestimate{
         // Step 38: Initialize point-to-plane super cost term
         // Constrains the trajectory to align keypoints with the map
         finalicp::P2PSuperCostTerm::Options p2p_options;
+        p2p_options.sequential_threshold = options_.sequential_threshold;
         p2p_options.num_threads = options_.num_threads; // Thread count (sequential here, but set for compatibility)
         p2p_options.p2p_loss_sigma = options_.p2p_loss_sigma; // Loss parameter for point-to-plane
         // Map loss function to enum
