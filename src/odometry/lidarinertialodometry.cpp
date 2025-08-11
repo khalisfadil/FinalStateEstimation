@@ -248,7 +248,8 @@ namespace  stateestimate{
         // Step 5: Apply voxel grid subsampling to frame_sub
         // Calls sub_sample_frame_outlier_removal to reduce the number of points by keeping one point per voxel
         // Modifies frame_sub in-place, using the provided voxel size, thread count, and threshold
-        sub_sample_frame_outlier_removal(frame_sub, size_voxel_subsampling, sequential_threshold);
+        // sub_sample_frame_outlier_removal(frame_sub, size_voxel_subsampling, sequential_threshold);
+        sub_sample_frame(frame_sub, size_voxel_subsampling, sequential_threshold);
 
         // Step 6: Reserve space in keypoints to avoid reallocations
         // Uses the size of the downsampled frame_sub to estimate the required capacity
@@ -1680,7 +1681,7 @@ namespace  stateestimate{
         std::vector<finalicp::BaseCostTerm::ConstPtr> prior_cost_terms; // Prior constraints
         std::vector<finalicp::BaseCostTerm::ConstPtr> meas_cost_terms; // Point cloud measurements
         std::vector<finalicp::BaseCostTerm::ConstPtr> imu_cost_terms; // IMU measurements
-        std::vector<finalicp::BaseCostTerm::ConstPtr> pose_meas_cost_terms; // Pose measurements
+        // std::vector<finalicp::BaseCostTerm::ConstPtr> pose_meas_cost_terms; // Pose measurements
         std::vector<finalicp::BaseCostTerm::ConstPtr> imu_prior_cost_terms; // IMU bias priors
         std::vector<finalicp::BaseCostTerm::ConstPtr> Ti2m_prior_cost_terms; // Ti2m priors
 
@@ -2234,9 +2235,9 @@ namespace  stateestimate{
         imu_options.r_imu_acc = options_.r_imu_acc; // Accelerometer noise
         imu_options.r_imu_ang = options_.r_imu_ang; // Gyroscope noise
 
-        const auto imu_super_cost_term = IMUSuperCostTerm::MakeShared(SLAM_TRAJ, prev_slam_time, finalicp::traj::Time(KNOT_TIMES.back()), trajectory_vars_[prev_trajectory_var_index].imu_biases,
-                trajectory_vars_[prev_trajectory_var_index + 1].imu_biases, trajectory_vars_[prev_trajectory_var_index].Ti2m,
-                trajectory_vars_[prev_trajectory_var_index + 1].Ti2m, imu_options);
+        // const auto imu_super_cost_term = IMUSuperCostTerm::MakeShared(SLAM_TRAJ, prev_slam_time, finalicp::traj::Time(KNOT_TIMES.back()), trajectory_vars_[prev_trajectory_var_index].imu_biases,
+        //         trajectory_vars_[prev_trajectory_var_index + 1].imu_biases, trajectory_vars_[prev_trajectory_var_index].Ti2m,
+        //         trajectory_vars_[prev_trajectory_var_index + 1].Ti2m, imu_options);
 
         // Step 33: Add IMU cost terms (if IMU is enabled)
         // IMU cost terms constrain the trajectory using accelerometer and gyroscope measurements
@@ -2709,13 +2710,13 @@ namespace  stateestimate{
 #ifdef DEBUG
             timer[1].second->start(); // Start association timer
 #endif
-            meas_cost_terms.clear(); // Clear previous measurement cost terms
+            // meas_cost_terms.clear(); // Clear previous measurement cost terms
             p2p_matches.clear(); // Clear previous point-to-plane matches
 
 #if USE_P2P_SUPER_COST_TERM
                 p2p_matches.reserve(keypoints.size()); // Reserve for new matches
 #else
-                meas_cost_terms.reserve(keypoints.size()); // Reserve for new cost terms
+                // meas_cost_terms.reserve(keypoints.size()); // Reserve for new cost terms
 #endif
 
 #ifdef DEBUG
@@ -2774,24 +2775,24 @@ namespace  stateestimate{
                         p2p_matches.emplace_back(P2PMatch(keypoint.timestamp, vector_neighbors[0],
                                                         weight * neighborhood.normal, keypoint.raw_pt));
 #else
-                        Eigen::Vector3d closest_pt = vector_neighbors[0];
-                        Eigen::Vector3d closest_normal = weight * neighborhood.normal;
-                        Eigen::Matrix3d W = (closest_normal * closest_normal.transpose() + 1e-5 * Eigen::Matrix3d::Identity());
-                        const auto noise_model = finalicp::StaticNoiseModel<3>::MakeShared(W, NoiseType::INFORMATION);
-                        const auto &Tb2m_intp_eval = Tb2m_intp_eval_map.at(keypoint.timestamp);
-                        const auto error_func = p2p::p2pError(Tb2m_intp_eval, closest_pt, keypoint.raw_pt);
-                        error_func->setTime(Time(keypoint.timestamp));
+                        // Eigen::Vector3d closest_pt = vector_neighbors[0];
+                        // Eigen::Vector3d closest_normal = weight * neighborhood.normal;
+                        // Eigen::Matrix3d W = (closest_normal * closest_normal.transpose() + 1e-5 * Eigen::Matrix3d::Identity());
+                        // const auto noise_model = finalicp::StaticNoiseModel<3>::MakeShared(W, NoiseType::INFORMATION);
+                        // const auto &Tb2m_intp_eval = Tb2m_intp_eval_map.at(keypoint.timestamp);
+                        // const auto error_func = p2p::p2pError(Tb2m_intp_eval, closest_pt, keypoint.raw_pt);
+                        // error_func->setTime(Time(keypoint.timestamp));
 
-                        const auto loss_func = [this]() -> BaseLossFunc::Ptr {
-                        switch (options_.p2p_loss_func) {
-                            case lidarinertialodom::LOSS_FUNC::L2: return L2LossFunc::MakeShared();
-                            case lidarinertialodom::LOSS_FUNC::DCS: return DcsLossFunc::MakeShared(options_.p2p_loss_sigma);
-                            case lidarinertialodom::LOSS_FUNC::CAUCHY: return CauchyLossFunc::MakeShared(options_.p2p_loss_sigma);
-                            case lidarinertialodom::LOSS_FUNC::GM: return GemanMcClureLossFunc::MakeShared(options_.p2p_loss_sigma);
-                            default: return nullptr;
-                        }
-                        }();
-                        meas_cost_terms.emplace_back(finalicp::WeightedLeastSqCostTerm<3>::MakeShared(error_func, noise_model, loss_func));
+                        // const auto loss_func = [this]() -> BaseLossFunc::Ptr {
+                        // switch (options_.p2p_loss_func) {
+                        //     case lidarinertialodom::LOSS_FUNC::L2: return L2LossFunc::MakeShared();
+                        //     case lidarinertialodom::LOSS_FUNC::DCS: return DcsLossFunc::MakeShared(options_.p2p_loss_sigma);
+                        //     case lidarinertialodom::LOSS_FUNC::CAUCHY: return CauchyLossFunc::MakeShared(options_.p2p_loss_sigma);
+                        //     case lidarinertialodom::LOSS_FUNC::GM: return GemanMcClureLossFunc::MakeShared(options_.p2p_loss_sigma);
+                        //     default: return nullptr;
+                        // }
+                        // }();
+                        // meas_cost_terms.emplace_back(finalicp::WeightedLeastSqCostTerm<3>::MakeShared(error_func, noise_model, loss_func));
 #endif
                     }
                 }
@@ -2876,7 +2877,7 @@ namespace  stateestimate{
                 // Efficiently move results from the reduction into the main vectors
                 p2p_matches = std::move(final_result.p2p_matches_local);
 #if !USE_P2P_SUPER_COST_TERM
-                meas_cost_terms = std::move(final_result.meas_cost_terms_local);
+                // meas_cost_terms = std::move(final_result.meas_cost_terms_local);
 #endif
             }
 
@@ -2887,7 +2888,7 @@ namespace  stateestimate{
 #if USE_P2P_SUPER_COST_TERM
                 N_matches = p2p_matches.size();
 #else
-                N_matches = meas_cost_terms.size();
+                // N_matches = meas_cost_terms.size();
 #endif
 
 #ifdef DEBUG
@@ -2895,24 +2896,24 @@ namespace  stateestimate{
             std::cout << "[ICP DEBUG] Found " << N_matches << " point-to-plane matches." << std::endl;
 #endif
             p2p_super_cost_term->initP2PMatches(); // Initialize point-to-plane matches
-#ifdef DEBUG
-                std::cout << "[ICP DEBUG] problem: add meas_cost_terms total: " << meas_cost_terms.size() << std::endl;
-#endif
-            for (const auto& cost : meas_cost_terms) {
-                problem->addCostTerm(cost); // Add point-to-plane cost terms | this is only if not using p2psupercostterm
-            }
+// #ifdef DEBUG
+//                 std::cout << "[ICP DEBUG] problem: add meas_cost_terms total: " << meas_cost_terms.size() << std::endl;
+// #endif
+//             for (const auto& cost : meas_cost_terms) {
+//                 problem->addCostTerm(cost); // Add point-to-plane cost terms | this is only if not using p2psupercostterm
+//             }
 #ifdef DEBUG
                 std::cout << "[ICP DEBUG] problem: add imu_cost_terms total: " << imu_cost_terms.size() << std::endl;
 #endif
             for (const auto& cost : imu_cost_terms) {
                 problem->addCostTerm(cost); // Add IMU cost terms
             }
-#ifdef DEBUG
-                std::cout << "[ICP DEBUG] problem: add pose_meas_cost_terms total: " << pose_meas_cost_terms.size() << std::endl;
-#endif
-            for (const auto& cost : pose_meas_cost_terms) {
-                problem->addCostTerm(cost); // Add pose measurement cost terms
-            }
+// #ifdef DEBUG
+//                 std::cout << "[ICP DEBUG] problem: add pose_meas_cost_terms total: " << pose_meas_cost_terms.size() << std::endl;
+// #endif
+//             for (const auto& cost : pose_meas_cost_terms) {
+//                 problem->addCostTerm(cost); // Add pose measurement cost terms
+//             }
 #ifdef DEBUG
                 std::cout << "[ICP DEBUG] problem: add imu_prior_cost_terms total: " << imu_prior_cost_terms.size() << std::endl;
 #endif
@@ -2929,12 +2930,12 @@ namespace  stateestimate{
                 std::cout << "[ICP DEBUG] problem: add p2p_super_cost_term." << std::endl;
 #endif
             problem->addCostTerm(p2p_super_cost_term); // Add point-to-plane super cost term
-#ifdef DEBUG
-                std::cout << "[ICP DEBUG] problem: add imu_super_cost_term total." << std::endl;
-#endif
-            if (options_.use_imu) {
-                problem->addCostTerm(imu_super_cost_term); // Add IMU super cost term
-            }
+            // if (options_.use_imu) {
+// #ifdef DEBUG
+//                 std::cout << "[ICP DEBUG] problem: add imu_super_cost_term total." << std::endl;
+// #endif
+            //     problem->addCostTerm(imu_super_cost_term); // Add IMU super cost term
+            // }
 
 #ifdef DEBUG
             timer[1].second->stop(); // Stop association timer
@@ -3120,18 +3121,18 @@ namespace  stateestimate{
         for (const auto& prior_cost_term : prior_cost_terms) {
             sliding_window_filter_->addCostTerm(prior_cost_term); // Add prior cost terms | not really adding much
         }
-#ifdef DEBUG
-            std::cout << "[ICP DEBUG] sliding_window_filter_: add meas_cost_terms total: " << meas_cost_terms.size() << std::endl;
-#endif
-        for (const auto& meas_cost_term : meas_cost_terms) {
-            sliding_window_filter_->addCostTerm(meas_cost_term); // Add point-to-plane cost terms | this is only if not using p2psupercostterm
-        }
-#ifdef DEBUG
-            std::cout << "[ICP DEBUG] sliding_window_filter_: add pose_meas_cost_terms total: " << pose_meas_cost_terms.size() << std::endl;
-#endif
-        for (const auto& pose_cost : pose_meas_cost_terms) {
-            sliding_window_filter_->addCostTerm(pose_cost); // Add pose measurement cost terms
-        }
+// #ifdef DEBUG
+//             std::cout << "[ICP DEBUG] sliding_window_filter_: add meas_cost_terms total: " << meas_cost_terms.size() << std::endl;
+// #endif
+//         for (const auto& meas_cost_term : meas_cost_terms) {
+//             sliding_window_filter_->addCostTerm(meas_cost_term); // Add point-to-plane cost terms | this is only if not using p2psupercostterm
+//         }
+// #ifdef DEBUG
+//             std::cout << "[ICP DEBUG] sliding_window_filter_: add pose_meas_cost_terms total: " << pose_meas_cost_terms.size() << std::endl;
+// #endif
+//         for (const auto& pose_cost : pose_meas_cost_terms) {
+//             sliding_window_filter_->addCostTerm(pose_cost); // Add pose measurement cost terms
+//         }
 #ifdef DEBUG
             std::cout << "[ICP DEBUG] sliding_window_filter_: add imu_cost_terms total: " << imu_cost_terms.size() << std::endl;
 #endif
@@ -3154,12 +3155,12 @@ namespace  stateestimate{
             std::cout << "[ICP DEBUG] sliding_window_filter_: add p2p_super_cost_term total." << std::endl;
 #endif
         sliding_window_filter_->addCostTerm(p2p_super_cost_term); // Add point-to-plane super cost term
-        if (options_.use_imu) {
-#ifdef DEBUG
-            std::cout << "[ICP DEBUG] sliding_window_filter_: add imu_super_cost_term." << std::endl;
-#endif
-            sliding_window_filter_->addCostTerm(imu_super_cost_term); // Add IMU super cost term
-        }
+//         if (options_.use_imu) {
+// #ifdef DEBUG
+//             std::cout << "[ICP DEBUG] sliding_window_filter_: add imu_super_cost_term." << std::endl;
+// #endif
+//             sliding_window_filter_->addCostTerm(imu_super_cost_term); // Add IMU super cost term
+//         }
 
 #ifdef DEBUG
         std::cout << "[ICP DEBUG] sliding_window_filter_: number of variables: " << sliding_window_filter_->getNumberOfVariables() << std::endl;
@@ -3249,7 +3250,7 @@ namespace  stateestimate{
             const auto bias_intp_eval = finalicp::vspace::VSpaceInterpolator<6>::MakeShared(curr_mid_slam_time, trajectory_vars_[i].imu_biases, trajectory_vars_[i].time, trajectory_vars_[i + 1].imu_biases, trajectory_vars_[i + 1].time);
             current_estimate.mid_b = bias_intp_eval->value();
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] mid_Ti2m: " << current_estimate.mid_Ti2m << std::endl;
+            std::cout << "[ICP DEBUG] mid_Ti2m:\n" << current_estimate.mid_Ti2m << std::endl;
             std::cout << "[ICP DEBUG] b_begin: " << trajectory_vars_[i].imu_biases->value().transpose() << std::endl;
             std::cout << "[ICP DEBUG] b_end: " << trajectory_vars_[i + 1].imu_biases->value().transpose() << std::endl;
 #endif
