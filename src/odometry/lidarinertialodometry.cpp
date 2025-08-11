@@ -1487,10 +1487,8 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [DEBUG] Verify that transformed points are valid
-        bool points_are_finite = true;
         for(const auto& point : frame) {
             if(!point.pt.allFinite()) {
-                points_are_finite = false;
                 std::cout << "[MAP DEBUG] CRITICAL: Transformed point `pt` is NOT finite!" << std::endl;
                 break;
             }
