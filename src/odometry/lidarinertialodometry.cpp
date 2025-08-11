@@ -480,10 +480,10 @@ namespace  stateestimate{
             if (odometry_options.contains("debug_path")) parsed_options.debug_path = odometry_options["debug_path"].get<std::string>();
 
             // lidarinertialodom::Options
-            if (odometry_options.contains("T_sr") && odometry_options["T_sr"].is_array() && odometry_options["T_sr"].size() == 16) {
+            if (odometry_options.contains("Tb2s") && odometry_options["Tb2s"].is_array() && odometry_options["Tb2s"].size() == 16) {
                 for (int i = 0; i < 4; ++i) {
                     for (int j = 0; j < 4; ++j) {
-                        parsed_options.T_sr(i, j) = odometry_options["T_sr"][i * 4 + j].get<double>();
+                        parsed_options.Tb2s(i, j) = odometry_options["Tb2s"][i * 4 + j].get<double>();
                     }
                 }
             }
@@ -570,16 +570,16 @@ namespace  stateestimate{
             if (odometry_options.contains("gyro_loss_func")) parsed_options.gyro_loss_func = odometry_options["gyro_loss_func"].get<std::string>();
             if (odometry_options.contains("gyro_loss_sigma")) parsed_options.gyro_loss_sigma = odometry_options["gyro_loss_sigma"].get<double>();
             
-            if (odometry_options.contains("T_mi_init_only")) parsed_options.T_mi_init_only = odometry_options["T_mi_init_only"].get<bool>();
-            if (odometry_options.contains("use_T_mi_gt")) parsed_options.use_T_mi_gt = odometry_options["use_T_mi_gt"].get<bool>();
-            if (odometry_options.contains("xi_ig") && odometry_options["xi_ig"].is_array() && odometry_options["xi_ig"].size() == 6) {
+            if (odometry_options.contains("Ti2m_init_only")) parsed_options.Ti2m_init_only = odometry_options["Ti2m_init_only"].get<bool>();
+            if (odometry_options.contains("use_Ti2m_gt")) parsed_options.use_Ti2m_gt = odometry_options["use_Ti2m_gt"].get<bool>();
+            if (odometry_options.contains("xi_g2i") && odometry_options["xi_g2i"].is_array() && odometry_options["xi_g2i"].size() == 6) {
                 for (int i = 0; i < 6; ++i) {
-                    parsed_options.xi_ig(i) = odometry_options["xi_ig"][i].get<double>();
+                    parsed_options.xi_g2i(i) = odometry_options["xi_g2i"][i].get<double>();
                 }
             }
-            if (odometry_options.contains("T_mi_init_cov") && odometry_options["T_mi_init_cov"].is_array() && odometry_options["T_mi_init_cov"].size() == 6) {
+            if (odometry_options.contains("Ti2m_init_cov") && odometry_options["Ti2m_init_cov"].is_array() && odometry_options["Ti2m_init_cov"].size() == 6) {
                 for (int i = 0; i < 6; ++i) {
-                    parsed_options.T_mi_init_cov(i) = odometry_options["T_mi_init_cov"][i].get<double>();
+                    parsed_options.Ti2m_init_cov(i) = odometry_options["Ti2m_init_cov"][i].get<double>();
                 }
             }
             if (odometry_options.contains("qg_diag") && odometry_options["qg_diag"].is_array() && odometry_options["qg_diag"].size() == 6) {
@@ -587,18 +587,18 @@ namespace  stateestimate{
                     parsed_options.qg_diag(i) = odometry_options["qg_diag"][i].get<double>();
                 }
             }
-            if (odometry_options.contains("T_mi_prior_cov") && odometry_options["T_mi_prior_cov"].is_array() && odometry_options["T_mi_prior_cov"].size() == 6) {
+            if (odometry_options.contains("Ti2m_prior_cov") && odometry_options["Ti2m_prior_cov"].is_array() && odometry_options["Ti2m_prior_cov"].size() == 6) {
                 for (int i = 0; i < 6; ++i) {
-                    parsed_options.T_mi_prior_cov(i) = odometry_options["T_mi_prior_cov"][i].get<double>();
+                    parsed_options.Ti2m_prior_cov(i) = odometry_options["Ti2m_prior_cov"][i].get<double>();
                 }
             }
-            if (odometry_options.contains("use_T_mi_prior_after_init")) parsed_options.use_T_mi_prior_after_init = odometry_options["use_T_mi_prior_after_init"].get<bool>();
+            if (odometry_options.contains("use_Ti2m_prior_after_init")) parsed_options.use_Ti2m_prior_after_init = odometry_options["use_Ti2m_prior_after_init"].get<bool>();
             if (odometry_options.contains("use_bias_prior_after_init")) parsed_options.use_bias_prior_after_init = odometry_options["use_bias_prior_after_init"].get<bool>();
 
-            if (odometry_options.contains("T_rm_init") && odometry_options["T_rm_init"].is_array() && odometry_options["T_rm_init"].size() == 16) {
+            if (odometry_options.contains("Tm2b_init") && odometry_options["Tm2b_init"].is_array() && odometry_options["Tm2b_init"].size() == 16) {
                 for (int i = 0; i < 4; ++i) {
                     for (int j = 0; j < 4; ++j) {
-                        parsed_options.T_rm_init(i, j) = odometry_options["T_rm_init"][i * 4 + j].get<double>();
+                        parsed_options.Tm2b_init(i, j) = odometry_options["Tm2b_init"][i * 4 + j].get<double>();
                     }
                 }
             }
@@ -630,8 +630,8 @@ namespace  stateestimate{
 
     lidarinertialodom::lidarinertialodom(const std::string& json_path)
         : Odometry(parse_json_options(json_path)), options_(parse_json_options(json_path)) {
-        T_sr_var_ = finalicp::se3::SE3StateVar::MakeShared(math::se3::Transformation(options_.T_sr));
-        T_sr_var_->locked() = true;
+        Tb2s_var_ = finalicp::se3::SE3StateVar::MakeShared(math::se3::Transformation(options_.Tb2s));
+        Tb2s_var_->locked() = true;
         sliding_window_filter_ = finalicp::SlidingWindowFilter::MakeShared(options_.num_threads);
     }
 
@@ -667,7 +667,7 @@ namespace  stateestimate{
         // Build full trajectory
         auto full_trajectory =  finalicp::traj::const_acc::Interface::MakeShared(options_.qc_diag);
         for (const auto& var : trajectory_vars_) {
-            full_trajectory->add(var.time, var.T_rm, var.w_mr_inr, var.dw_mr_inr);
+            full_trajectory->add(var.time, var.Tm2b, var.wb2m_inr, var.dwb2m_inr);
         }
 #ifdef DEBUG
             std::cout << "[DECONSTRUCT] Dumping trajectory." << std::endl;
@@ -683,16 +683,16 @@ namespace  stateestimate{
 
         for (double time = begin_time; time <= end_time; time += dt) {
             Time traj_time(time);
-            const auto T_rm = full_trajectory->getPoseInterpolator(traj_time)->value().matrix();
-            const auto w_mr_inr = full_trajectory->getVelocityInterpolator(traj_time)->value();
+            const auto Tm2b = full_trajectory->getPoseInterpolator(traj_time)->value().matrix();
+            const auto wb2m_inr = full_trajectory->getVelocityInterpolator(traj_time)->value();
 
             buffer << traj_time.nanosecs() << " "
-                << T_rm(0, 0) << " " << T_rm(0, 1) << " " << T_rm(0, 2) << " " << T_rm(0, 3) << " "
-                << T_rm(1, 0) << " " << T_rm(1, 1) << " " << T_rm(1, 2) << " " << T_rm(1, 3) << " "
-                << T_rm(2, 0) << " " << T_rm(2, 1) << " " << T_rm(2, 2) << " " << T_rm(2, 3) << " "
-                << T_rm(3, 0) << " " << T_rm(3, 1) << " " << T_rm(3, 2) << " " << T_rm(3, 3) << " "
-                << w_mr_inr(0) << " " << w_mr_inr(1) << " " << w_mr_inr(2) << " "
-                << w_mr_inr(3) << " " << w_mr_inr(4) << " " << w_mr_inr(5) << "\n";
+                << Tm2b(0, 0) << " " << Tm2b(0, 1) << " " << Tm2b(0, 2) << " " << Tm2b(0, 3) << " "
+                << Tm2b(1, 0) << " " << Tm2b(1, 1) << " " << Tm2b(1, 2) << " " << Tm2b(1, 3) << " "
+                << Tm2b(2, 0) << " " << Tm2b(2, 1) << " " << Tm2b(2, 2) << " " << Tm2b(2, 3) << " "
+                << Tm2b(3, 0) << " " << Tm2b(3, 1) << " " << Tm2b(3, 2) << " " << Tm2b(3, 3) << " "
+                << wb2m_inr(0) << " " << wb2m_inr(1) << " " << wb2m_inr(2) << " "
+                << wb2m_inr(3) << " " << wb2m_inr(4) << " " << wb2m_inr(5) << "\n";
         }
 
         // Write buffered output to file
@@ -709,7 +709,7 @@ namespace  stateestimate{
     // ########################################################################
     
     void lidarinertialodom::initT(const Eigen::Matrix4d& T) {
-        options_.T_rm_init = T;
+        options_.Tm2b_init = T;
     }
 
     // ########################################################################
@@ -727,7 +727,7 @@ namespace  stateestimate{
         // Build full trajectory
         auto full_trajectory = finalicp::traj::const_acc::Interface::MakeShared(options_.qc_diag);
         for (const auto& var : trajectory_vars_) {
-            full_trajectory->add(var.time, var.T_rm, var.w_mr_inr, var.dw_mr_inr);
+            full_trajectory->add(var.time, var.Tm2b, var.wb2m_inr, var.dwb2m_inr);
         }
 
         // LOG(INFO) << "Updating trajectory." << std::endl;
@@ -736,29 +736,29 @@ namespace  stateestimate{
         using namespace finalicp::traj;
 
         // Cache T_sr inverse
-        const Eigen::Matrix4d T_rs = options_.T_sr.inverse();
+        const Eigen::Matrix4d Ts2b = options_.Tb2s.inverse();
 
         // Sequential update
         for (auto& frame : trajectory_) {
             // Begin pose
             Time begin_slam_time(frame.begin_timestamp);
-            const auto begin_T_mr = full_trajectory->getPoseInterpolator(begin_slam_time)->value().inverse().matrix();
-            const auto begin_T_ms = begin_T_mr * T_rs;
-            frame.begin_R = begin_T_ms.block<3, 3>(0, 0);
-            frame.begin_t = begin_T_ms.block<3, 1>(0, 3);
+            const auto begin_Tb2m = full_trajectory->getPoseInterpolator(begin_slam_time)->value().inverse().matrix();
+            const auto begin_Ts2m = begin_Tb2m * Ts2b;
+            frame.begin_R = begin_Ts2m.block<3, 3>(0, 0);
+            frame.begin_t = begin_Ts2m.block<3, 1>(0, 3);
 
             // Mid pose
             Time mid_slam_time(static_cast<double>(frame.getEvalTime()));
-            const auto mid_T_mr = full_trajectory->getPoseInterpolator(mid_slam_time)->value().inverse().matrix();
-            const auto mid_T_ms = mid_T_mr * T_rs;
-            frame.setMidPose(mid_T_ms);
+            const auto mid_Tb2m = full_trajectory->getPoseInterpolator(mid_slam_time)->value().inverse().matrix();
+            const auto mid_Ts2m = mid_Tb2m * Ts2b;
+            frame.setMidPose(mid_Ts2m);
 
             // End pose
             Time end_slam_time(frame.end_timestamp);
-            const auto end_T_mr = full_trajectory->getPoseInterpolator(end_slam_time)->value().inverse().matrix();
-            const auto end_T_ms = end_T_mr * T_rs;
-            frame.end_R = end_T_ms.block<3, 3>(0, 0);
-            frame.end_t = end_T_ms.block<3, 1>(0, 3);
+            const auto end_Tb2m = full_trajectory->getPoseInterpolator(end_slam_time)->value().inverse().matrix();
+            const auto end_Ts2m = end_Tb2m * Ts2b;
+            frame.end_R = end_Ts2m.block<3, 3>(0, 0);
+            frame.end_t = end_Ts2m.block<3, 1>(0, 3);
         }
 
         return trajectory_;
@@ -911,45 +911,45 @@ namespace  stateestimate{
 #endif
 
             // Define initial transformations and velocities
-            math::se3::Transformation T_rm;
-            math::se3::Transformation T_mi;
-            math::se3::Transformation T_sr(options_.T_sr);
+            math::se3::Transformation Tm2b;
+            math::se3::Transformation Ti2m;
+            math::se3::Transformation Tb2s(options_.Tb2s);
 
-            Eigen::Matrix<double, 6, 1> w_mr_inr = Eigen::Matrix<double, 6, 1>::Zero();
-            Eigen::Matrix<double, 6, 1> dw_mr_inr = Eigen::Matrix<double, 6, 1>::Zero();
+            Eigen::Matrix<double, 6, 1> wb2m_inr = Eigen::Matrix<double, 6, 1>::Zero();
+            Eigen::Matrix<double, 6, 1> dwb2m_inr = Eigen::Matrix<double, 6, 1>::Zero();
             Eigen::Matrix<double, 6, 1> b_zero = Eigen::Matrix<double, 6, 1>::Zero();
 
             // Initialize trajectory variables for the beginning of the frame
             const double begin_time = trajectory_[index_frame].begin_timestamp;
             Time begin_slam_time(begin_time);
-            auto begin_T_rm_var = SE3StateVar::MakeShared(T_rm);
-            auto begin_w_mr_inr_var = VSpaceStateVar<6>::MakeShared(w_mr_inr);
-            auto begin_dw_mr_inr_var = VSpaceStateVar<6>::MakeShared(dw_mr_inr);
+            auto begin_Tm2b_var = SE3StateVar::MakeShared(Tm2b);
+            auto begin_wb2m_inr_var = VSpaceStateVar<6>::MakeShared(wb2m_inr);
+            auto begin_dwb2m_inr_var = VSpaceStateVar<6>::MakeShared(dwb2m_inr);
             auto begin_imu_biases = VSpaceStateVar<6>::MakeShared(b_zero);
-            // Initialize T_mi_var DIRECTLY with the ground truth value
-            auto begin_T_mi_var = SE3StateVar::MakeShared(T_mi); 
-            trajectory_vars_.emplace_back(begin_slam_time, std::move(begin_T_rm_var), std::move(begin_w_mr_inr_var),
-                                        std::move(begin_dw_mr_inr_var), std::move(begin_imu_biases), std::move(begin_T_mi_var));
+            // Initialize Ti2m_var DIRECTLY with the ground truth value
+            auto begin_Ti2m_var = SE3StateVar::MakeShared(Ti2m); 
+            trajectory_vars_.emplace_back(begin_slam_time, std::move(begin_Tm2b_var), std::move(begin_wb2m_inr_var),
+                                        std::move(begin_dwb2m_inr_var), std::move(begin_imu_biases), std::move(begin_Ti2m_var));
 
             // Initialize trajectory variables for the end of the frame
             const double end_time = trajectory_[index_frame].end_timestamp;
             Time end_slam_time(end_time);
-            auto end_T_rm_var = SE3StateVar::MakeShared(T_rm);
-            auto end_w_mr_inr_var = VSpaceStateVar<6>::MakeShared(w_mr_inr);
-            auto end_dw_mr_inr_var = VSpaceStateVar<6>::MakeShared(dw_mr_inr);
+            auto end_Tm2b_var = SE3StateVar::MakeShared(Tm2b);
+            auto end_wb2m_inr_var = VSpaceStateVar<6>::MakeShared(wb2m_inr);
+            auto end_dwb2m_inr_var = VSpaceStateVar<6>::MakeShared(dwb2m_inr);
             auto end_imu_biases = VSpaceStateVar<6>::MakeShared(b_zero);
-            // Initialize T_mi_var DIRECTLY with the ground truth value
-            auto end_T_mi_var = SE3StateVar::MakeShared(T_mi); 
-            trajectory_vars_.emplace_back(end_slam_time, std::move(end_T_rm_var), std::move(end_w_mr_inr_var),
-                                        std::move(end_dw_mr_inr_var), std::move(end_imu_biases), std::move(end_T_mi_var));
+            // Initialize Ti2m_var DIRECTLY with the ground truth value
+            auto end_Ti2m_var = SE3StateVar::MakeShared(Ti2m); 
+            trajectory_vars_.emplace_back(end_slam_time, std::move(end_Tm2b_var), std::move(end_wb2m_inr_var),
+                                        std::move(end_dwb2m_inr_var), std::move(end_imu_biases), std::move(end_Ti2m_var));
 
 #ifdef DEBUG
             std::cout << "[REG DEBUG] Frame 0: Created " << trajectory_vars_.size() << " initial state variables." << std::endl;
             std::cout << "[REG DEBUG] Frame 0 timestamps: begin=" << std::fixed << begin_time << ", end=" << end_time << std::endl;
 #endif
-            Eigen::Matrix<double, 6, 1> xi_mi = initialize_gravity(const_frame.imu_data_vec);
-            begin_T_mi_var->update(xi_mi);
-            end_T_mi_var->update(xi_mi);
+            Eigen::Matrix<double, 6, 1> xi_i2m = initialize_gravity(const_frame.imu_data_vec);
+            begin_Ti2m_var->update(xi_i2m);
+            end_Ti2m_var->update(xi_i2m);
 
             to_marginalize_ = 1;
 
@@ -958,9 +958,9 @@ namespace  stateestimate{
             Eigen::Matrix<double, 6, 6> P0_pose = options_.p0_pose.asDiagonal();
             Eigen::Matrix<double, 6, 6> P0_vel = options_.p0_vel.asDiagonal();
             Eigen::Matrix<double, 6, 6> P0_accel = options_.p0_accel.asDiagonal();
-            trajectory_[index_frame].end_T_rm_cov = P0_pose;
-            trajectory_[index_frame].end_w_mr_inr_cov = P0_vel;
-            trajectory_[index_frame].end_dw_mr_inr_cov = P0_accel;
+            trajectory_[index_frame].end_Tm2b_cov = P0_pose;
+            trajectory_[index_frame].end_wb2m_inr_cov = P0_vel;
+            trajectory_[index_frame].end_dwb2m_inr_cov = P0_accel;
 
             summary.success = true;
 
@@ -1143,46 +1143,45 @@ namespace  stateestimate{
         if (index_frame == 0) { //MAIN ALLERT as T_sr is identity. T_ms is exactly same as T_mr
             // --- For the very first frame, use the ground truth initial pose ---
 
-            // // 1. Get the ground truth T_rm from options.
-            // const Eigen::Matrix4d T_rm = options_.T_rm_init;
+            // // 1. Get the ground truth Tm2b from options.
+            // const Eigen::Matrix4d Tm2b = options_.Tm2b_init;
 
             // 1. Let initial as identity
-            // const Eigen::Matrix4d T_rm = Eigen::Matrix<double, 4, 4>::Identity();
+            // const Eigen::Matrix4d Tm2b = Eigen::Matrix<double, 4, 4>::Identity();
 
             // // 2. Efficiently compute its inverse to get T_mr.
-            // Eigen::Matrix3d R_rm = T_rm.block<3, 3>(0, 0);
-            // Eigen::Vector3d t_rm = T_rm.block<3, 1>(0, 3);
+            // Eigen::Matrix3d Rm2b = Tm2b.block<3, 3>(0, 0);
+            // Eigen::Vector3d tm2b = Tm2b.block<3, 1>(0, 3);
 
-            // Eigen::Matrix3d R_mr = R_rm.transpose();
-            // Eigen::Vector3d t_mr = -R_mr * t_rm;
+            // Eigen::Matrix3d Rb2m = Rm2b.transpose();
+            // Eigen::Vector3d tb2m = -Rb2m * tm2b;
 
-            // Eigen::Matrix4d T_mr = Eigen::Matrix4d::Identity();
-            // T_mr.block<3, 3>(0, 0) = R_mr;
-            // T_mr.block<3, 1>(0, 3) = t_mr;
-            const Eigen::Matrix4d T_mr = Eigen::Matrix<double, 4, 4>::Identity();
-
+            // Eigen::Matrix4d Tb2m = Eigen::Matrix4d::Identity();
+            // Tb2m.block<3, 3>(0, 0) = Rb2m;
+            // Tb2m.block<3, 1>(0, 3) = tb2m;
+            const Eigen::Matrix4d Tb2m = Eigen::Matrix<double, 4, 4>::Identity();
 
             // 3. Get the transformation from sensor to robot (T_rs).
-            const Eigen::Matrix4d T_rs = options_.T_sr.inverse();
+            const Eigen::Matrix4d Ts2b = options_.Tb2s.inverse();
 
             // 4. Calculate the initial sensor pose in the map: T_ms = T_mr * T_rs.
-            const Eigen::Matrix4d T_ms = T_mr * T_rs;
+            const Eigen::Matrix4d Ts2m = Tb2m * Ts2b;
 
 #ifdef DEBUG
             // [ADDED DEBUG] Print the initial transformations for Frame 0
             std::cout << "[INIT MOTION DEBUG] Frame 0: Using initial pose from options." << std::endl;
-            std::cout << "[INIT MOTION DEBUG] Frame 0: Initial Sensor Pose (T_ms):\n" << T_ms << std::endl;
-            if (!T_ms.allFinite()) {
-                std::cout << "[INIT MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)!" << std::endl;
+            std::cout << "[INIT MOTION DEBUG] Frame 0: Initial Sensor Pose (Ts2m):\n" << Ts2m << std::endl;
+            if (!Ts2m.allFinite()) {
+                std::cout << "[INIT MOTION DEBUG] CRITICAL: Initial pose Ts2m is non-finite (NaN or inf)!" << std::endl;
             } else {
-                std::cout << "[INIT MOTION DEBUG] Initial pose T_ms is finite." << std::endl;
+                std::cout << "[INIT MOTION DEBUG] Initial pose Ts2m is finite." << std::endl;
             }
 #endif
             // 5. Set the trajectory's initial pose.
-            trajectory_[index_frame].begin_R = T_ms.block<3, 3>(0, 0);
-            trajectory_[index_frame].begin_t = T_ms.block<3, 1>(0, 3);
-            trajectory_[index_frame].end_R = T_ms.block<3, 3>(0, 0);
-            trajectory_[index_frame].end_t = T_ms.block<3, 1>(0, 3);
+            trajectory_[index_frame].begin_R = Ts2m.block<3, 3>(0, 0);
+            trajectory_[index_frame].begin_t = Ts2m.block<3, 1>(0, 3);
+            trajectory_[index_frame].end_R = Ts2m.block<3, 3>(0, 0);
+            trajectory_[index_frame].end_t = Ts2m.block<3, 1>(0, 3);
 
         } else if (index_frame == 1) {
             // For the second frame, its motion starts from the end of the first frame.
@@ -1197,7 +1196,7 @@ namespace  stateestimate{
         std::cout << "[INIT MOTION DEBUG] Frame 1: Initial Pose (Rotation):\n" << trajectory_[index_frame].begin_R << std::endl;
         std::cout << "[INIT MOTION DEBUG] Frame 1: Initial Pose (Translation): " << trajectory_[index_frame].begin_t.transpose() << std::endl;
         if (!trajectory_[index_frame].begin_R.allFinite() || !trajectory_[index_frame].end_R.allFinite() || !trajectory_[index_frame].begin_t.allFinite() || !trajectory_[index_frame].end_t.allFinite()) {
-            std::cout << "[INIT MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)!" << std::endl;
+            std::cout << "[INIT MOTION DEBUG] CRITICAL: Initial pose Ts2m is non-finite (NaN or inf)!" << std::endl;
         } else {
             std::cout << "[INIT MOTION DEBUG] Initial pose T_ms is finite." << std::endl;
         }
@@ -1387,7 +1386,7 @@ namespace  stateestimate{
         size_t start_idx = std::max(static_cast<int>(to_marginalize_) - 1, 0);
         for (size_t i = start_idx; i < trajectory_vars_.size(); i++) {
             const auto& var = trajectory_vars_.at(i);
-            update_trajectory->add(var.time, var.T_rm, var.w_mr_inr, var.dw_mr_inr);
+            update_trajectory->add(var.time, var.Tm2b, var.wb2m_inr, var.dwb2m_inr);
             num_states++;
             if (var.time == end_slam_time) break;
             if (var.time > end_slam_time) {
@@ -1413,41 +1412,41 @@ namespace  stateestimate{
         std::cout << "[MAP DEBUG] Found " << unique_point_times.size() << " unique timestamps in the point cloud." << std::endl;
 #endif
         // Cache interpolated poses
-        const Eigen::Matrix4d T_rs = options_.T_sr.inverse(); // transformation of sensor relative to robot
+        const Eigen::Matrix4d Ts2b = options_.Tb2s.inverse(); // transformation of sensor relative to robot
 
-        std::map<double, Eigen::Matrix4d> T_ms_cache_map;
+        std::map<double, Eigen::Matrix4d> Ts2m_cache_map;
         if (unique_point_times.size() < static_cast<size_t>(options_.sequential_threshold)) {
             // Sequential pose interpolation
             for (const auto& ts : unique_point_times) {
-                const auto T_rm_intp_eval = update_trajectory->getPoseInterpolator(finalicp::traj::Time(ts)); // Correctly gets the Robot-in-Map pose (T_rm).
+                const auto Tm2b_intp_eval = update_trajectory->getPoseInterpolator(finalicp::traj::Time(ts)); // Correctly gets the Robot-in-Map pose (Tb2m).
 
-                const Eigen::Matrix4d T_ms = T_rm_intp_eval->value().inverse().matrix() * T_rs; // This correctly computes the final Sensor-to-Map transformation (T_ms = T_mr * T_rs).
+                const Eigen::Matrix4d Ts2m = Tm2b_intp_eval->value().inverse().matrix() * Ts2b; // This correctly computes the final Sensor-to-Map transformation (T_ms = T_mr * T_rs).
 
-                T_ms_cache_map[ts] = T_ms; 
+                Ts2m_cache_map[ts] = Ts2m; 
             }
         } else {
             // Parallel pose interpolation with TBB
             // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, options_.num_threads);
-            tbb::concurrent_vector<Eigen::Matrix4d> T_ms_cache(unique_point_times.size());
+            tbb::concurrent_vector<Eigen::Matrix4d> Ts2m_cache(unique_point_times.size());
             tbb::parallel_for(tbb::blocked_range<size_t>(0, unique_point_times.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                     for (size_t jj = range.begin(); jj != range.end(); ++jj) {
                         const auto& ts = unique_point_times[jj];
-                        const auto T_rm_intp_eval = update_trajectory->getPoseInterpolator(finalicp::traj::Time(ts));
-                        const Eigen::Matrix4d T_ms = T_rm_intp_eval->value().inverse().matrix() * T_rs;
-                        T_ms_cache[jj] = T_ms;
+                        const auto Tm2b_intp_eval = update_trajectory->getPoseInterpolator(finalicp::traj::Time(ts));
+                        const Eigen::Matrix4d Ts2m = Tm2b_intp_eval->value().inverse().matrix() * Ts2b;
+                        Ts2m_cache[jj] = Ts2m;
                     }
                 });
 
             // Populate cache map
             for (size_t jj = 0; jj < unique_point_times.size(); ++jj) {
-                T_ms_cache_map[unique_point_times[jj]] = T_ms_cache[jj];
+                Ts2m_cache_map[unique_point_times[jj]] = Ts2m_cache[jj];
             }
         }
 
 #ifdef DEBUG
         // [DEBUG] Verify that cached poses are valid
         bool poses_are_finite = true;
-        for(const auto& pair : T_ms_cache_map) {
+        for(const auto& pair : Ts2m_cache_map) {
             if (!pair.second.allFinite()) {
                 poses_are_finite = false;
                 std::cout << "[MAP DEBUG] CRITICAL: Cached pose for timestamp " << pair.first << " is NOT finite!" << std::endl;
@@ -1455,7 +1454,7 @@ namespace  stateestimate{
             }
         }
         if (poses_are_finite) {
-            std::cout << "[MAP DEBUG] All " << T_ms_cache_map.size() << " cached poses are finite." << std::endl;
+            std::cout << "[MAP DEBUG] All " << Ts2m_cache_map.size() << " cached poses are finite." << std::endl;
         }
 #endif
 
@@ -1464,8 +1463,8 @@ namespace  stateestimate{
             // Sequential point transformation
             for (auto& point : frame) {
                 try {
-                    const auto& T_ms = T_ms_cache_map.at(point.timestamp);
-                    point.pt = T_ms.block<3, 3>(0, 0) * point.raw_pt + T_ms.block<3, 1>(0, 3); // Correctly applies the transformation to move a point from the sensor's frame into the global map frame.
+                    const auto& Ts2m = Ts2m_cache_map.at(point.timestamp);
+                    point.pt = Ts2m.block<3, 3>(0, 0) * point.raw_pt + Ts2m.block<3, 1>(0, 3); // Correctly applies the transformation to move a point from the sensor's frame into the global map frame.
                 } catch (const std::out_of_range&) {
                     throw std::runtime_error("Timestamp not found in cache in updateMap for frame " + std::to_string(update_frame));
                 }
@@ -1477,8 +1476,8 @@ namespace  stateestimate{
                     for (size_t i = range.begin(); i != range.end(); ++i) {
                         auto& point = frame[i];
                         try {
-                            const auto& T_ms = T_ms_cache_map.at(point.timestamp);
-                            point.pt = T_ms.block<3, 3>(0, 0) * point.raw_pt + T_ms.block<3, 1>(0, 3);
+                            const auto& Ts2m = Ts2m_cache_map.at(point.timestamp);
+                            point.pt = Ts2m.block<3, 3>(0, 0) * point.raw_pt + Ts2m.block<3, 1>(0, 3);
                         } catch (const std::out_of_range&) {
                             throw std::runtime_error("Timestamp not found in cache in updateMap for frame " + std::to_string(update_frame));
                         }
@@ -1529,13 +1528,13 @@ namespace  stateestimate{
     // updateMap 
     // ########################################################################
 
-    /*The lidarinertialodom::initialize_gravity function estimates the initial IMU-to-map transformation (T_mi) 
+    /*The lidarinertialodom::initialize_gravity function estimates the initial IMU-to-map transformation (Ti2m) 
     for a LiDAR-inertial odometry system using a vector of IMU data (imu_data_vec). 
-    It validates non-empty input and finite accelerations, initializes locked state variables (pose T_rm, biases, and velocities), 
+    It validates non-empty input and finite accelerations, initializes locked state variables (pose Tm2b, biases, and velocities), 
     and sets up a noise model and L2 loss function based on options_.r_imu_acc and gravity. 
     It creates cost terms for acceleration errors (sequentially or in parallel via TBB, depending on size) 
-    and adds a prior cost for T_mi with covariance from options_.T_mi_init_cov. 
-    A Gauss-Newton solver optimizes the problem to refine T_mi, returning its 6D vector representation after ensuring finite results, 
+    and adds a prior cost for Ti2m with covariance from options_.Ti2m_init_cov. 
+    A Gauss-Newton solver optimizes the problem to refine Ti2m, returning its 6D vector representation after ensuring finite results, 
     enabling gravity-aligned initialization for odometry.*/
 
     Eigen::Matrix<double, 6, 1> lidarinertialodom::initialize_gravity(const std::vector<finalicp::IMUData> &imu_data_vec) {
@@ -1550,17 +1549,17 @@ namespace  stateestimate{
 #endif
 
         // Initialize state variables
-        const auto T_rm_init = finalicp::se3::SE3StateVar::MakeShared(math::se3::Transformation());
-        math::se3::Transformation T_mi;
-        const auto T_mi_var = finalicp::se3::SE3StateVar::MakeShared(T_mi);
-        T_rm_init->locked() = true;
+        const auto Tm2b_init = finalicp::se3::SE3StateVar::MakeShared(math::se3::Transformation());
+        math::se3::Transformation Ti2m;
+        const auto Ti2m_var = finalicp::se3::SE3StateVar::MakeShared(Ti2m);
+        Tm2b_init->locked() = true;
 
         Eigen::Matrix<double, 6, 1> b_zero = Eigen::Matrix<double, 6, 1>::Zero();
         Eigen::Matrix<double, 6, 1> dw_zero = Eigen::Matrix<double, 6, 1>::Zero();
         const auto bias = finalicp::vspace::VSpaceStateVar<6>::MakeShared(b_zero);
-        const auto dw_mr_inr = finalicp::vspace::VSpaceStateVar<6>::MakeShared(dw_zero);
+        const auto dwb2m_inr = finalicp::vspace::VSpaceStateVar<6>::MakeShared(dw_zero);
         bias->locked() = true;
-        dw_mr_inr->locked() = true;
+        dwb2m_inr->locked() = true;
 
         // Initialize noise model and loss function
         Eigen::Matrix<double, 3, 3> R = options_.r_imu_acc.asDiagonal();
@@ -1571,7 +1570,7 @@ namespace  stateestimate{
         std::vector<finalicp::BaseCostTerm::ConstPtr> cost_terms;
         cost_terms.reserve(imu_data_vec.size()); // +1 for prior term
         for (const auto &imu_data : imu_data_vec) {
-            auto acc_error_func = finalicp::imu::AccelerationError(T_rm_init, dw_mr_inr, bias, T_mi_var, imu_data.lin_acc);
+            auto acc_error_func = finalicp::imu::AccelerationError(Tm2b_init, dwb2m_inr, bias, Ti2m_var, imu_data.lin_acc);
             acc_error_func->setGravity(options_.gravity);
             const auto acc_cost = finalicp::WeightedLeastSqCostTerm<3>::MakeShared(acc_error_func, noise_model, loss_func);
             cost_terms.emplace_back(acc_cost);
@@ -1583,16 +1582,16 @@ namespace  stateestimate{
 #endif
 
         {
-            // Add prior cost term for T_mi
-            Eigen::Matrix<double, 6, 6> init_T_mi_cov = options_.T_mi_init_cov.asDiagonal();
-            init_T_mi_cov(3, 3) = 1.0;
-            init_T_mi_cov(4, 4) = 1.0;
-            init_T_mi_cov(5, 5) = 1.0;
-            math::se3::Transformation T_mi_zero;
-            auto T_mi_error = finalicp::se3::se3_error(T_mi_var, T_mi_zero);
-            auto prior_noise_model = finalicp::StaticNoiseModel<6>::MakeShared(init_T_mi_cov);
+            // Add prior cost term for Ti2m
+            Eigen::Matrix<double, 6, 6> init_Ti2m_cov = options_.Ti2m_init_cov.asDiagonal();
+            init_Ti2m_cov(3, 3) = 1.0;
+            init_Ti2m_cov(4, 4) = 1.0;
+            init_Ti2m_cov(5, 5) = 1.0;
+            math::se3::Transformation Ti2m_zero;
+            auto Ti2m_error = finalicp::se3::se3_error(Ti2m_var, Ti2m_zero);
+            auto prior_noise_model = finalicp::StaticNoiseModel<6>::MakeShared(init_Ti2m_cov);
             auto prior_loss_func = finalicp::L2LossFunc::MakeShared();
-            cost_terms.emplace_back(finalicp::WeightedLeastSqCostTerm<6>::MakeShared(T_mi_error, prior_noise_model, prior_loss_func));
+            cost_terms.emplace_back(finalicp::WeightedLeastSqCostTerm<6>::MakeShared(Ti2m_error, prior_noise_model, prior_loss_func));
         }
 
         // Solve optimization problem
@@ -1600,7 +1599,7 @@ namespace  stateestimate{
         for (const auto& cost : cost_terms) {
             problem.addCostTerm(cost);
         }
-        problem.addStateVariable(T_mi_var);
+        problem.addStateVariable(Ti2m_var);
 
         finalicp::GaussNewtonSolverNVA::Params params;
         params.max_iterations = static_cast<unsigned int>(options_.max_iterations);
@@ -1608,17 +1607,17 @@ namespace  stateestimate{
         solver.optimize();
 
 #ifdef DEBUG
-        std::cout<< "[GRAVITY INIT DEBUG] T_mi:\n" << T_mi_var->value().matrix() << std::endl;
-        std::cout << "[GRAVITY INIT DEBUG] T_mi_var:\n"  << T_mi_var->value().vec() << std::endl;
+        std::cout<< "[GRAVITY INIT DEBUG] Ti2m:\n" << Ti2m_var->value().matrix() << std::endl;
+        std::cout << "[GRAVITY INIT DEBUG] Ti2m_var:\n"  << Ti2m_var->value().vec() << std::endl;
         // [ADDED DEBUG] Check if the result of the optimization is valid
-        if (!T_mi_var->value().vec().allFinite()) {
+        if (!Ti2m_var->value().vec().allFinite()) {
             std::cout << "[GRAVITY INIT DEBUG] CRITICAL: Solver produced a non-finite (NaN or inf) result!" << std::endl;
         } else {
             std::cout << "[GRAVITY INIT DEBUG] Solver finished, result is finite." << std::endl;
         }
 #endif
         
-        return T_mi_var->value().vec();
+        return Ti2m_var->value().vec();
     }
 
 
@@ -1683,7 +1682,7 @@ namespace  stateestimate{
         std::vector<finalicp::BaseCostTerm::ConstPtr> imu_cost_terms; // IMU measurements
         std::vector<finalicp::BaseCostTerm::ConstPtr> pose_meas_cost_terms; // Pose measurements
         std::vector<finalicp::BaseCostTerm::ConstPtr> imu_prior_cost_terms; // IMU bias priors
-        std::vector<finalicp::BaseCostTerm::ConstPtr> T_mi_prior_cost_terms; // T_mi priors
+        std::vector<finalicp::BaseCostTerm::ConstPtr> Ti2m_prior_cost_terms; // Ti2m priors
 
         // Step 6: Track indices for trajectory variables
         // prev_trajectory_var_index points to the last state in trajectory_vars_
@@ -1708,17 +1707,17 @@ namespace  stateestimate{
         // These describe the robot’s state at the end of the previous frame
         const auto& PREV_VAR = trajectory_vars_.back(); // Last state in trajectory_vars_
         finalicp::traj::Time prev_slam_time = PREV_VAR.time; // Timestamp
-        math::se3::Transformation prev_T_rm = PREV_VAR.T_rm->value(); // Map-to-robot pose
-        Eigen::Matrix<double, 6, 1> prev_w_mr_inr = PREV_VAR.w_mr_inr->value(); // Velocity
-        Eigen::Matrix<double, 6, 1> prev_dw_mr_inr = PREV_VAR.dw_mr_inr->value(); // Acceleration
+        math::se3::Transformation prev_Tm2b = PREV_VAR.Tm2b->value(); // Map-to-robot pose
+        Eigen::Matrix<double, 6, 1> prev_wb2m_inr = PREV_VAR.wb2m_inr->value(); // Velocity
+        Eigen::Matrix<double, 6, 1> prev_dwb2m_inr = PREV_VAR.dwb2m_inr->value(); // Acceleration
         Eigen::Matrix<double, 6, 1> prev_imu_biases = PREV_VAR.imu_biases->value(); // IMU biases
-        math::se3::Transformation prev_T_mi = PREV_VAR.T_mi->value(); // IMU-to-map transformation
+        math::se3::Transformation prev_Ti2m = PREV_VAR.Ti2m->value(); // IMU-to-map transformation
 
 #ifdef DEBUG
     // [DEBUG] Check if the state from the previous frame is valid
-    if (!prev_T_rm.matrix().allFinite()) { std::cout << "[ICP DEBUG] CRITICAL: prev_T_rm is NOT finite!" << std::endl; }
-    if (!prev_w_mr_inr.allFinite()) { std::cout << "[ICP DEBUG] CRITICAL: prev_w_mr_inr is NOT finite!" << std::endl; }
-    if (!prev_dw_mr_inr.allFinite()) { std::cout << "[ICP DEBUG] CRITICAL: prev_dw_mr_inr is NOT finite!" << std::endl; }
+    if (!prev_Tm2b.matrix().allFinite()) { std::cout << "[ICP DEBUG] CRITICAL: prev_Tm2b is NOT finite!" << std::endl; }
+    if (!prev_wb2m_inr.allFinite()) { std::cout << "[ICP DEBUG] CRITICAL: prev_wb2m_inr is NOT finite!" << std::endl; }
+    if (!prev_dwb2m_inr.allFinite()) { std::cout << "[ICP DEBUG] CRITICAL: prev_dwb2m_inr is NOT finite!" << std::endl; }
 #endif
 
         // Step 11: Validate previous state values
@@ -1726,40 +1725,40 @@ namespace  stateestimate{
 
         // Step 12: Get pointers to previous state variables
         // These are shared pointers to state objects for SLAM optimization
-        const auto prev_T_rm_var = PREV_VAR.T_rm; // Pose variable
-        const auto prev_w_mr_inr_var = PREV_VAR.w_mr_inr; // Velocity variable
-        const auto prev_dw_mr_inr_var = PREV_VAR.dw_mr_inr; // Acceleration variable
+        const auto prev_Tm2b_var = PREV_VAR.Tm2b; // Pose variable
+        const auto prev_wb2m_inr_var = PREV_VAR.wb2m_inr; // Velocity variable
+        const auto prev_dwb2m_inr_var = PREV_VAR.dwb2m_inr; // Acceleration variable
         const auto prev_imu_biases_var = PREV_VAR.imu_biases; // IMU biases variable
-        auto prev_T_mi_var = PREV_VAR.T_mi; // T_mi variable (non-const for updates)
+        auto prev_Ti2m_var = PREV_VAR.Ti2m; // Ti2m variable (non-const for updates)
 
-        // Step 13: Prepare ground truth IMU-to-map transformation (T_mi_gt)
-        // xi_ig (assumed 6D vector) defines the ground truth T_mi (rotation + translation)
+        // Step 13: Prepare ground truth IMU-to-map transformation (Ti2m_gt)
+        // xi_ig (assumed 6D vector) defines the ground truth Ti2m (rotation + translation)
         // Zero translation to focus on rotation (common for IMU alignment)
-        bool use_T_mi_gt = options_.use_T_mi_gt; // Use ground truth T_mi if true
-        Eigen::Matrix4d T_mi_gt_mat = math::se3::Transformation(options_.xi_ig).matrix();
-        T_mi_gt_mat.block<3, 1>(0, 3).setZero(); // Set translation (x, y, z) to 0
-        math::se3::Transformation T_mi_gt(T_mi_gt_mat); // Create transformation object
+        bool use_Ti2m_gt = options_.use_Ti2m_gt; // Use ground truth Ti2m if true
+        Eigen::Matrix4d Ti2m_gt_mat = math::se3::Transformation(options_.xi_g2i).matrix();
+        Ti2m_gt_mat.block<3, 1>(0, 3).setZero(); // Set translation (x, y, z) to 0
+        math::se3::Transformation Ti2m_gt(Ti2m_gt_mat); // Create transformation object
 
         // Step 14: Add previous state to SLAM trajectory
         // This anchors the trajectory at the previous frame’s end state
-        SLAM_TRAJ->add(prev_slam_time, prev_T_rm_var, prev_w_mr_inr_var, prev_dw_mr_inr_var);
+        SLAM_TRAJ->add(prev_slam_time, prev_Tm2b_var, prev_wb2m_inr_var, prev_dwb2m_inr_var);
 #ifdef DEBUG
         std::cout << "[ICP DEBUG] SLAM_TRAJ: add prev_slam_time." << std::endl; 
-        std::cout << "[ICP DEBUG] SLAM_TRAJ: add prev_T_rm_var."  << std::endl;
-        std::cout << "[ICP DEBUG] SLAM_TRAJ: add prev_w_mr_inr_var." << std::endl;
-        std::cout << "[ICP DEBUG] SLAM_TRAJ: add prev_dw_mr_inr_var." << std::endl;
+        std::cout << "[ICP DEBUG] SLAM_TRAJ: add prev_Tm2b_var."  << std::endl;
+        std::cout << "[ICP DEBUG] SLAM_TRAJ: add prev_wb2m_inr_var." << std::endl;
+        std::cout << "[ICP DEBUG] SLAM_TRAJ: add prev_dwb2m_inr_var." << std::endl;
 #endif
 
         // Step 15: Add previous state variables to optimization list
         // These variables will be optimized (if not locked) in ICP
-        SLAM_STATE_VAR.emplace_back(prev_T_rm_var); // Add pose
-        SLAM_STATE_VAR.emplace_back(prev_w_mr_inr_var); // Add velocity
-        SLAM_STATE_VAR.emplace_back(prev_dw_mr_inr_var); // Add acceleration
+        SLAM_STATE_VAR.emplace_back(prev_Tm2b_var); // Add pose
+        SLAM_STATE_VAR.emplace_back(prev_wb2m_inr_var); // Add velocity
+        SLAM_STATE_VAR.emplace_back(prev_dwb2m_inr_var); // Add acceleration
 
 #ifdef DEBUG
-    std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace prev_T_rm_var." << std::endl; 
-    std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace prev_w_mr_inr_var." << std::endl;
-    std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace prev_dw_mr_inr_var." << std::endl;
+    std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace prev_Tm2b_var." << std::endl; 
+    std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace prev_wb2m_inr_var." << std::endl;
+    std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace prev_dwb2m_inr_var." << std::endl;
 #endif
 
         // Step 16: Handle IMU-related state variables (if IMU is enabled)
@@ -1770,24 +1769,24 @@ namespace  stateestimate{
             std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace prev_imu_biases_var." << std::endl; 
 #endif
 
-            // Decide how to handle T_mi (IMU-to-map transformation)
-            if (use_T_mi_gt) {
-                // Use ground truth T_mi: set T_mi to T_mi_gt and lock it
-                prev_T_mi_var->update(T_mi_gt.vec()); // Update to ground truth (rotation only)
-                // LOG(INFO) << "prev_T_mi_var->value()" << std::endl;
-                // LOG(INFO) << prev_T_mi_var->value() << std::endl;
-                prev_T_mi_var->locked() = true; // Lock to prevent optimization
+            // Decide how to handle Ti2m (IMU-to-map transformation)
+            if (use_Ti2m_gt) {
+                // Use ground truth Ti2m: set Ti2m to Ti2m_gt and lock it
+                prev_Ti2m_var->update(Ti2m_gt.vec()); // Update to ground truth (rotation only)
+                // LOG(INFO) << "prev_Ti2m_var->value()" << std::endl;
+                // LOG(INFO) << prev_Ti2m_var->value() << std::endl;
+                prev_Ti2m_var->locked() = true; // Lock to prevent optimization
             } else {
-                // Use estimated T_mi: decide if it should be optimized
-                if (!options_.T_mi_init_only || index_frame == 1) {
-                    // Optimize T_mi if not init-only or this is the first frame
-                    // T_mi_init_only=true means optimize T_mi only at index_frame=1
-                    SLAM_STATE_VAR.emplace_back(prev_T_mi_var); // Add for optimization
+                // Use estimated Ti2m: decide if it should be optimized
+                if (!options_.Ti2m_init_only || index_frame == 1) {
+                    // Optimize Ti2m if not init-only or this is the first frame
+                    // Ti2m_init_only=true means optimize Ti2m only at index_frame=1
+                    SLAM_STATE_VAR.emplace_back(prev_Ti2m_var); // Add for optimization
 #ifdef DEBUG
-                    std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace prev_T_mi_var." << std::endl; 
+                    std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace prev_Ti2m_var." << std::endl; 
 #endif
                 }
-                // If T_mi_init_only=true and index_frame>1, T_mi stays as is (not optimized)
+                // If Ti2m_init_only=true and index_frame>1, Ti2m stays as is (not optimized)
             }
         }
 
@@ -1878,33 +1877,33 @@ namespace  stateestimate{
             finalicp::traj::Time knot_slam_time(knot_time);
 
             // Predict pose using previous velocity for intermediate states, T_next for end state
-            const Eigen::Matrix<double, 6, 1> xi_mr_inr_odo = (knot_slam_time - prev_slam_time).seconds() * prev_w_mr_inr;
-            const auto knot_T_rm = math::se3::Transformation(xi_mr_inr_odo) * prev_T_rm;
-            //if (i == num_states - 1) knot_T_rm = T_next; // Use predicted pose for end state
+            const Eigen::Matrix<double, 6, 1> xi_b2m_inr_odo = (knot_slam_time - prev_slam_time).seconds() * prev_wb2m_inr;
+            const auto knot_Tm2b = math::se3::Transformation(xi_b2m_inr_odo) * prev_Tm2b;
+            //if (i == num_states - 1) knot_Tm2b = T_next; // Use predicted pose for end state
 
             // Create state variables
-            const auto T_rm_var = finalicp::se3::SE3StateVar::MakeShared(knot_T_rm); // New pose
-            const auto w_mr_inr_var = finalicp::vspace::VSpaceStateVar<6>::MakeShared(prev_w_mr_inr); // Copy velocity
-            const auto dw_mr_inr_var = finalicp::vspace::VSpaceStateVar<6>::MakeShared(prev_dw_mr_inr); // Copy acceleration
+            const auto Tm2b_var = finalicp::se3::SE3StateVar::MakeShared(knot_Tm2b); // New pose
+            const auto wb2m_inr_var = finalicp::vspace::VSpaceStateVar<6>::MakeShared(prev_wb2m_inr); // Copy velocity
+            const auto dwb2m_inr_var = finalicp::vspace::VSpaceStateVar<6>::MakeShared(prev_dwb2m_inr); // Copy acceleration
             const auto imu_biases_var = finalicp::vspace::VSpaceStateVar<6>::MakeShared(prev_imu_biases); // Copy biases
 
             // Add state to trajectory
-            SLAM_TRAJ->add(knot_slam_time, T_rm_var, w_mr_inr_var, dw_mr_inr_var);
+            SLAM_TRAJ->add(knot_slam_time, Tm2b_var, wb2m_inr_var, dwb2m_inr_var);
 #ifdef DEBUG
             std::cout << "[ICP DEBUG] SLAM_TRAJ: add knot_slam_time." << std::endl; 
-            std::cout << "[ICP DEBUG] SLAM_TRAJ: add T_rm_var." << std::endl;
-            std::cout << "[ICP DEBUG] SLAM_TRAJ: add w_mr_inr_var." << std::endl;
-            std::cout << "[ICP DEBUG] SLAM_TRAJ: add dw_mr_inr_var." << std::endl;
+            std::cout << "[ICP DEBUG] SLAM_TRAJ: add Tm2b_var." << std::endl;
+            std::cout << "[ICP DEBUG] SLAM_TRAJ: add wb2m_inr_var." << std::endl;
+            std::cout << "[ICP DEBUG] SLAM_TRAJ: add dwb2m_inr_var." << std::endl;
 #endif
 
             // Add state variables to optimization list
-            SLAM_STATE_VAR.emplace_back(T_rm_var); // Add pose
-            SLAM_STATE_VAR.emplace_back(w_mr_inr_var); // Add velocity
-            SLAM_STATE_VAR.emplace_back(dw_mr_inr_var); // Add acceleration
+            SLAM_STATE_VAR.emplace_back(Tm2b_var); // Add pose
+            SLAM_STATE_VAR.emplace_back(wb2m_inr_var); // Add velocity
+            SLAM_STATE_VAR.emplace_back(dwb2m_inr_var); // Add acceleration
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace T_rm_var." << std::endl; 
-            std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace w_mr_inr_var." << std::endl; 
-            std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace dw_mr_inr_var." << std::endl; 
+            std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace Tm2b_var." << std::endl; 
+            std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace wb2m_inr_var." << std::endl; 
+            std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace dwb2m_inr_var." << std::endl; 
 #endif
             if (options_.use_imu) {
                 SLAM_STATE_VAR.emplace_back(imu_biases_var); // Add IMU biases
@@ -1913,23 +1912,23 @@ namespace  stateestimate{
 #endif
             }
 
-            const auto T_mi_var = finalicp::se3::SE3StateVar::MakeShared(use_T_mi_gt ? math::se3::Transformation() : prev_T_mi);
+            const auto Ti2m_var = finalicp::se3::SE3StateVar::MakeShared(use_Ti2m_gt ? math::se3::Transformation() : prev_Ti2m);
 
-            if (use_T_mi_gt) {
-                T_mi_var->locked() = true; // Lock T_mi if ground truth or init-only
-                trajectory_vars_.emplace_back(knot_slam_time, T_rm_var, w_mr_inr_var, dw_mr_inr_var, imu_biases_var, T_mi_var);
+            if (use_Ti2m_gt) {
+                Ti2m_var->locked() = true; // Lock Ti2m if ground truth or init-only
+                trajectory_vars_.emplace_back(knot_slam_time, Tm2b_var, wb2m_inr_var, dwb2m_inr_var, imu_biases_var, Ti2m_var);
             } else {
                 if (options_.use_imu) {
-                    if (options_.T_mi_init_only) {
-                        T_mi_var->locked() = true;
+                    if (options_.Ti2m_init_only) {
+                        Ti2m_var->locked() = true;
                     } else {
-                        SLAM_STATE_VAR.emplace_back(T_mi_var); // Optimize T_mi
+                        SLAM_STATE_VAR.emplace_back(Ti2m_var); // Optimize Ti2m
 #ifdef DEBUG
-                        std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace T_mi_var." << std::endl; 
+                        std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace Ti2m_var." << std::endl; 
 #endif
                     }
                 }
-                trajectory_vars_.emplace_back(knot_slam_time, T_rm_var, w_mr_inr_var, dw_mr_inr_var, imu_biases_var, T_mi_var);
+                trajectory_vars_.emplace_back(knot_slam_time, Tm2b_var, wb2m_inr_var, dwb2m_inr_var, imu_biases_var, Ti2m_var);
                 
             }
             // Update index for next state
@@ -1944,10 +1943,10 @@ namespace  stateestimate{
             // Get the previous frame’s state variables
             const auto& PREV_VAR = trajectory_vars_.at(prev_trajectory_var_index);
 
-            // Define initial pose (T_rm, identity), velocity (w_mr_inr, zero), and acceleration (dw_mr_inr, zero)
-            math::se3::Transformation T_rm; // Identity transformation (no initial offset)
-            Eigen::Matrix<double, 6, 1> w_mr_inr = Eigen::Matrix<double, 6, 1>::Zero(); // Zero initial velocity
-            Eigen::Matrix<double, 6, 1> dw_mr_inr = Eigen::Matrix<double, 6, 1>::Zero(); // Zero initial acceleration
+            // Define initial pose (Tm2b, identity), velocity (wb2m_inr, zero), and acceleration (dwb2m_inr, zero)
+            math::se3::Transformation Tm2b; // Identity transformation (no initial offset)
+            Eigen::Matrix<double, 6, 1> wb2m_inr = Eigen::Matrix<double, 6, 1>::Zero(); // Zero initial velocity
+            Eigen::Matrix<double, 6, 1> dwb2m_inr = Eigen::Matrix<double, 6, 1>::Zero(); // Zero initial acceleration
 
             // Set covariance matrices for priors using options_ (uncertainty in initial guesses)
             Eigen::Matrix<double, 6, 6> P0_pose = Eigen::Matrix<double, 6, 6>::Identity();
@@ -1958,9 +1957,9 @@ namespace  stateestimate{
             P0_accel.diagonal() = options_.p0_accel; // Acceleration covariance
 
             // Add prior cost terms to constrain initial state
-            SLAM_TRAJ->addPosePrior(PREV_VAR.time, T_rm, P0_pose); // Constrain initial pose
-            SLAM_TRAJ->addVelocityPrior(PREV_VAR.time, w_mr_inr, P0_vel); // Constrain initial velocity
-            SLAM_TRAJ->addAccelerationPrior(PREV_VAR.time, dw_mr_inr, P0_accel); // Constrain initial acceleration
+            SLAM_TRAJ->addPosePrior(PREV_VAR.time, Tm2b, P0_pose); // Constrain initial pose
+            SLAM_TRAJ->addVelocityPrior(PREV_VAR.time, wb2m_inr, P0_vel); // Constrain initial velocity
+            SLAM_TRAJ->addAccelerationPrior(PREV_VAR.time, dwb2m_inr, P0_accel); // Constrain initial acceleration
             
 #ifdef DEBUG
             std::cout << "[ICP DEBUG] SLAM_TRAJ: addPosePrior." << std::endl;
@@ -2023,49 +2022,49 @@ namespace  stateestimate{
 #endif
             }
 
-            // For the initial frame, add a prior for T_mi if not using ground truth
-            if (index_frame == 1 && !use_T_mi_gt) {
+            // For the initial frame, add a prior for Ti2m if not using ground truth
+            if (index_frame == 1 && !use_Ti2m_gt) {
  
                 // Get the previous frame’s state variables
                 const auto& PREV_VAR = trajectory_vars_.at(prev_trajectory_var_index);
 
-                // Set covariance for initial T_mi prior
-                Eigen::Matrix<double, 6, 6> init_T_mi_cov = Eigen::Matrix<double, 6, 6>::Identity();
-                init_T_mi_cov.diagonal() = options_.T_mi_init_cov;
+                // Set covariance for initial Ti2m prior
+                Eigen::Matrix<double, 6, 6> init_Ti2m_cov = Eigen::Matrix<double, 6, 6>::Identity();
+                init_Ti2m_cov.diagonal() = options_.Ti2m_init_cov;
 
-                // Use current T_mi as the prior guess
-                math::se3::Transformation T_mi = PREV_VAR.T_mi->value();
+                // Use current Ti2m as the prior guess
+                math::se3::Transformation Ti2m = PREV_VAR.Ti2m->value();
 
-                // Create cost term to constrain initial T_mi
-                auto T_mi_error = finalicp::se3::se3_error(PREV_VAR.T_mi, T_mi);
-                auto noise_model = finalicp::StaticNoiseModel<6>::MakeShared(init_T_mi_cov);
+                // Create cost term to constrain initial Ti2m
+                auto Ti2m_error = finalicp::se3::se3_error(PREV_VAR.Ti2m, Ti2m);
+                auto noise_model = finalicp::StaticNoiseModel<6>::MakeShared(init_Ti2m_cov);
                 auto loss_func = finalicp::L2LossFunc::MakeShared();
-                const auto T_mi_prior_factor = finalicp::WeightedLeastSqCostTerm<6>::MakeShared(T_mi_error, noise_model, loss_func);
-                T_mi_prior_cost_terms.emplace_back(T_mi_prior_factor);
+                const auto Ti2m_prior_factor = finalicp::WeightedLeastSqCostTerm<6>::MakeShared(Ti2m_error, noise_model, loss_func);
+                Ti2m_prior_cost_terms.emplace_back(Ti2m_prior_factor);
 #ifdef DEBUG
-                    std::cout << "[ICP DEBUG] T_mi_prior_cost_terms: Emplace T_mi_prior_factor." << std::endl;
+                    std::cout << "[ICP DEBUG] Ti2m_prior_cost_terms: Emplace Ti2m_prior_factor." << std::endl;
 #endif
             }
-            // For subsequent frames, add T_mi prior if enabled and not using ground truth
-            if (!options_.T_mi_init_only && !use_T_mi_gt && options_.use_T_mi_prior_after_init) {
+            // For subsequent frames, add Ti2m prior if enabled and not using ground truth
+            if (!options_.Ti2m_init_only && !use_Ti2m_gt && options_.use_Ti2m_prior_after_init) {
                 // Get the previous frame’s state variables
                 const auto& PREV_VAR = trajectory_vars_.at(prev_trajectory_var_index);
 
-                // Set covariance for ongoing T_mi prior
-                Eigen::Matrix<double, 6, 6> T_mi_cov = Eigen::Matrix<double, 6, 6>::Identity();
-                T_mi_cov.diagonal() = options_.T_mi_prior_cov;
+                // Set covariance for ongoing Ti2m prior
+                Eigen::Matrix<double, 6, 6> Ti2m_cov = Eigen::Matrix<double, 6, 6>::Identity();
+                Ti2m_cov.diagonal() = options_.Ti2m_prior_cov;
 
-                // Use identity T_mi as the prior guess (no offset)
-                math::se3::Transformation T_mi;
+                // Use identity Ti2m as the prior guess (no offset)
+                math::se3::Transformation Ti2m;
 
-                // Create cost term to constrain T_mi
-                auto T_mi_error = finalicp::se3::se3_error(PREV_VAR.T_mi, T_mi);
-                auto noise_model = finalicp::StaticNoiseModel<6>::MakeShared(T_mi_cov);
+                // Create cost term to constrain Ti2m
+                auto Ti2m_error = finalicp::se3::se3_error(PREV_VAR.Ti2m, Ti2m);
+                auto noise_model = finalicp::StaticNoiseModel<6>::MakeShared(Ti2m_cov);
                 auto loss_func = finalicp::L2LossFunc::MakeShared();
-                const auto T_mi_prior_factor = finalicp::WeightedLeastSqCostTerm<6>::MakeShared(T_mi_error, noise_model, loss_func);
-                T_mi_prior_cost_terms.emplace_back(T_mi_prior_factor);
+                const auto Ti2m_prior_factor = finalicp::WeightedLeastSqCostTerm<6>::MakeShared(Ti2m_error, noise_model, loss_func);
+                Ti2m_prior_cost_terms.emplace_back(Ti2m_prior_factor);
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] T_mi_prior_cost_terms: Emplace T_mi_prior_factor." << std::endl;
+                std::cout << "[ICP DEBUG] Ti2m_prior_cost_terms: Emplace Ti2m_prior_factor." << std::endl;
 #endif
             }
         }
@@ -2099,19 +2098,19 @@ namespace  stateestimate{
                 const auto& PREV_VAR = trajectory_vars_.at(prev_trajectory_var_index);
 
                 // Add pose, velocity, and acceleration to the sliding window
-                sliding_window_filter_->addStateVariable(std::vector<finalicp::StateVarBase::Ptr>{PREV_VAR.T_rm, PREV_VAR.w_mr_inr, PREV_VAR.dw_mr_inr});
+                sliding_window_filter_->addStateVariable(std::vector<finalicp::StateVarBase::Ptr>{PREV_VAR.Tm2b, PREV_VAR.wb2m_inr, PREV_VAR.dwb2m_inr});
 
-                // If IMU is enabled, add IMU biases and optionally T_mi
+                // If IMU is enabled, add IMU biases and optionally Ti2m
                 if (options_.use_imu) {
 #ifdef DEBUG
                     std::cout << "[ICP DEBUG] Apply an IMU bias variable on initial frame " << index_frame << std::endl;
 #endif
                     sliding_window_filter_->addStateVariable(std::vector<finalicp::StateVarBase::Ptr>{PREV_VAR.imu_biases});
-                    if (!use_T_mi_gt) {
+                    if (!use_Ti2m_gt) {
 #ifdef DEBUG
-                        std::cout << "[ICP DEBUG] Apply a prior T_mi variable for initial frame " << index_frame << "as we are not using T_mi_gt" << std::endl;
+                        std::cout << "[ICP DEBUG] Apply a prior Ti2m variable for initial frame " << index_frame << "as we are not using Ti2m_gt" << std::endl;
 #endif
-                        sliding_window_filter_->addStateVariable(std::vector<finalicp::StateVarBase::Ptr>{PREV_VAR.T_mi});
+                        sliding_window_filter_->addStateVariable(std::vector<finalicp::StateVarBase::Ptr>{PREV_VAR.Ti2m});
                     }
                 }
             }
@@ -2122,13 +2121,13 @@ namespace  stateestimate{
                 const auto& VAR = trajectory_vars_.at(i);
 
                 // Add pose, velocity, and acceleration to the sliding window
-                sliding_window_filter_->addStateVariable(std::vector<finalicp::StateVarBase::Ptr>{VAR.T_rm, VAR.w_mr_inr, VAR.dw_mr_inr});
+                sliding_window_filter_->addStateVariable(std::vector<finalicp::StateVarBase::Ptr>{VAR.Tm2b, VAR.wb2m_inr, VAR.dwb2m_inr});
 
-                // If IMU is enabled, add IMU biases and optionally T_mi
+                // If IMU is enabled, add IMU biases and optionally Ti2m
                 if (options_.use_imu) {
                     sliding_window_filter_->addStateVariable(std::vector<finalicp::StateVarBase::Ptr>{VAR.imu_biases});
-                    if (!options_.T_mi_init_only && !use_T_mi_gt) {
-                        sliding_window_filter_->addStateVariable(std::vector<finalicp::StateVarBase::Ptr>{VAR.T_mi});
+                    if (!options_.Ti2m_init_only && !use_Ti2m_gt) {
+                        sliding_window_filter_->addStateVariable(std::vector<finalicp::StateVarBase::Ptr>{VAR.Ti2m});
                     }
                 }
             }
@@ -2157,18 +2156,18 @@ namespace  stateestimate{
                     end_marg_time = VAR.time.seconds();
 #ifdef DEBUG
                         // Check if the variables are valid *before* marginalizing them
-                        if(!VAR.T_rm->value().matrix().allFinite()) {
-                           std::cout << "[ICP DEBUG] CRITICAL: VAR.T_rm at index " << i << " is NaN before marginalization!" << std::endl;
+                        if(!VAR.Tm2b->value().matrix().allFinite()) {
+                           std::cout << "[ICP DEBUG] CRITICAL: VAR.Tm2b at index " << i << " is NaN before marginalization!" << std::endl;
                         }
 #endif
                     // Add state variables to marginalize
-                    marg_vars.emplace_back(VAR.T_rm);
-                    marg_vars.emplace_back(VAR.w_mr_inr);
-                    marg_vars.emplace_back(VAR.dw_mr_inr);
+                    marg_vars.emplace_back(VAR.Tm2b);
+                    marg_vars.emplace_back(VAR.wb2m_inr);
+                    marg_vars.emplace_back(VAR.dwb2m_inr);
                     if (options_.use_imu) {
                         marg_vars.emplace_back(VAR.imu_biases);
-                        if (!VAR.T_mi->locked()) {
-                            marg_vars.emplace_back(VAR.T_mi);
+                        if (!VAR.Ti2m->locked()) {
+                            marg_vars.emplace_back(VAR.Ti2m);
                         }
                     }
                     num_states++;
@@ -2236,8 +2235,8 @@ namespace  stateestimate{
         imu_options.r_imu_ang = options_.r_imu_ang; // Gyroscope noise
 
         const auto imu_super_cost_term = IMUSuperCostTerm::MakeShared(SLAM_TRAJ, prev_slam_time, finalicp::traj::Time(KNOT_TIMES.back()), trajectory_vars_[prev_trajectory_var_index].imu_biases,
-                trajectory_vars_[prev_trajectory_var_index + 1].imu_biases, trajectory_vars_[prev_trajectory_var_index].T_mi,
-                trajectory_vars_[prev_trajectory_var_index + 1].T_mi, imu_options);
+                trajectory_vars_[prev_trajectory_var_index + 1].imu_biases, trajectory_vars_[prev_trajectory_var_index].Ti2m,
+                trajectory_vars_[prev_trajectory_var_index + 1].Ti2m, imu_options);
 
         // Step 33: Add IMU cost terms (if IMU is enabled)
         // IMU cost terms constrain the trajectory using accelerometer and gyroscope measurements
@@ -2276,22 +2275,22 @@ namespace  stateestimate{
                 );
 
                 // Interpolate pose, velocity, and acceleration
-                const auto T_rm_intp_eval = SLAM_TRAJ->getPoseInterpolator(finalicp::traj::Time(imu_data.timestamp));
-                const auto w_mr_inr_intp_eval = SLAM_TRAJ->getVelocityInterpolator(finalicp::traj::Time(imu_data.timestamp));
-                const auto dw_mr_inr_intp_eval = SLAM_TRAJ->getAccelerationInterpolator(finalicp::traj::Time(imu_data.timestamp));
+                const auto Tm2b_intp_eval = SLAM_TRAJ->getPoseInterpolator(finalicp::traj::Time(imu_data.timestamp));
+                const auto wb2m_inr_intp_eval = SLAM_TRAJ->getVelocityInterpolator(finalicp::traj::Time(imu_data.timestamp));
+                const auto dwb2m_inr_intp_eval = SLAM_TRAJ->getAccelerationInterpolator(finalicp::traj::Time(imu_data.timestamp));
 
                 // Create acceleration error term
                 const auto acc_error_func = [&]() -> finalicp::imu::AccelerationErrorEvaluator::Ptr {
-                    if (options_.T_mi_init_only) {
-                        // Use fixed T_mi for initial frame
-                        return finalicp::imu::AccelerationError(T_rm_intp_eval, dw_mr_inr_intp_eval, bias_intp_eval, trajectory_vars_[i].T_mi, imu_data.lin_acc);
+                    if (options_.Ti2m_init_only) {
+                        // Use fixed Ti2m for initial frame
+                        return finalicp::imu::AccelerationError(Tm2b_intp_eval, dwb2m_inr_intp_eval, bias_intp_eval, trajectory_vars_[i].Ti2m, imu_data.lin_acc);
                     } else {
-                        // Interpolate T_mi between knots
-                        const auto T_mi_intp_eval = finalicp::se3::PoseInterpolator::MakeShared(
-                            finalicp::traj::Time(imu_data.timestamp), trajectory_vars_[i].T_mi, trajectory_vars_[i].time,
-                            trajectory_vars_[i + 1].T_mi, trajectory_vars_[i + 1].time
+                        // Interpolate Ti2m between knots
+                        const auto Ti2m_intp_eval = finalicp::se3::PoseInterpolator::MakeShared(
+                            finalicp::traj::Time(imu_data.timestamp), trajectory_vars_[i].Ti2m, trajectory_vars_[i].time,
+                            trajectory_vars_[i + 1].Ti2m, trajectory_vars_[i + 1].time
                         );
-                        return finalicp::imu::AccelerationError(T_rm_intp_eval, dw_mr_inr_intp_eval, bias_intp_eval, T_mi_intp_eval, imu_data.lin_acc);
+                        return finalicp::imu::AccelerationError(Tm2b_intp_eval, dwb2m_inr_intp_eval, bias_intp_eval, Ti2m_intp_eval, imu_data.lin_acc);
                     }
                 }();
 
@@ -2300,7 +2299,7 @@ namespace  stateestimate{
                 acc_error_func->setTime(finalicp::traj::Time(imu_data.timestamp));
 
                 // Create gyroscope error term
-                const auto gyro_error_func = finalicp::imu::GyroError(w_mr_inr_intp_eval, bias_intp_eval, imu_data.ang_vel);
+                const auto gyro_error_func = finalicp::imu::GyroError(wb2m_inr_intp_eval, bias_intp_eval, imu_data.ang_vel);
                 gyro_error_func->setTime(finalicp::traj::Time(imu_data.timestamp));
 
                 // Add acceleration cost term (if enabled)
@@ -2348,35 +2347,35 @@ namespace  stateestimate{
 #endif
             }
             
-            // Step 35: Add prior cost terms for T_mi (if not init-only and not using ground truth)
-            // Constrain changes in T_mi between consecutive states
-            // Get T_mi prior cost terms
-            if (!options_.T_mi_init_only && !use_T_mi_gt) {
+            // Step 35: Add prior cost terms for Ti2m(if not init-only and not using ground truth)
+            // Constrain changes in Ti2m between consecutive states
+            // Get Ti2m prior cost terms
+            if (!options_.Ti2m_init_only && !use_Ti2m_gt) {
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] Apply a prior cost term for T_mi term for initial frame " << index_frame << "as we are not using ground truth and not init only." << std::endl;
+                std::cout << "[ICP DEBUG] Apply a prior cost term for Ti2m term for initial frame " << index_frame << "as we are not using ground truth and not init only." << std::endl;
 #endif 
-                // Define identity T_mi as the prior guess (no relative change)
-                const auto T_mi = math::se3::Transformation();
+                // Define identity Ti2m as the prior guess (no relative change)
+                const auto Ti2m = math::se3::Transformation();
 
-                // Set covariance for T_mi prior
-                Eigen::Matrix<double, 6, 6> T_mi_cov = Eigen::Matrix<double, 6, 6>::Identity();
-                T_mi_cov.diagonal() = options_.qg_diag;
+                // Set covariance for Ti2m prior
+                Eigen::Matrix<double, 6, 6> Ti2m_cov = Eigen::Matrix<double, 6, 6>::Identity();
+                Ti2m_cov.diagonal() = options_.qg_diag;
 
-                // Create noise model and loss function for T_mi prior
-                auto noise_model = finalicp::StaticNoiseModel<6>::MakeShared(T_mi_cov);
+                // Create noise model and loss function for Ti2m prior
+                auto noise_model = finalicp::StaticNoiseModel<6>::MakeShared(Ti2m_cov);
                 auto loss_func = finalicp::L2LossFunc::MakeShared();
 
                 // Add prior for each pair of consecutive states
                 size_t i = prev_trajectory_var_index;
                 for (; i < trajectory_vars_.size() - 1; i++) {
-                    // Create error term: relative transformation between consecutive T_mi
-                    auto T_mi_error = finalicp::se3::se3_error(finalicp::se3::compose_rinv(trajectory_vars_[i + 1].T_mi, trajectory_vars_[i].T_mi), T_mi);
+                    // Create error term: relative transformation between consecutive Ti2m
+                    auto Ti2m_error = finalicp::se3::se3_error(finalicp::se3::compose_rinv(trajectory_vars_[i + 1].Ti2m, trajectory_vars_[i].Ti2m), Ti2m);
 
                     // Create and add prior cost term
-                    const auto T_mi_prior_factor = finalicp::WeightedLeastSqCostTerm<6>::MakeShared(T_mi_error, noise_model, loss_func);
-                    T_mi_prior_cost_terms.emplace_back(T_mi_prior_factor);
+                    const auto Ti2m_prior_factor = finalicp::WeightedLeastSqCostTerm<6>::MakeShared(Ti2m_error, noise_model, loss_func);
+                    Ti2m_prior_cost_terms.emplace_back(Ti2m_prior_factor);
 #ifdef DEBUG
-                    std::cout << "[ICP DEBUG] T_mi_prior_cost_terms: Emplace T_mi_prior_factor." << std::endl;
+                    std::cout << "[ICP DEBUG] Ti2m_prior_cost_terms: Emplace Ti2m_prior_factor." << std::endl;
 #endif
                 }
             }
@@ -2472,7 +2471,7 @@ namespace  stateestimate{
 
             // Step 37.1: Cache interpolated poses for unique timestamps
             // Computes and stores pose matrices (T_mr) for each timestamp in unique_point_times
-            std::map<double, Eigen::Matrix4d> T_mr_cache_map;
+            std::map<double, Eigen::Matrix4d> Tb2m_cache_map;
 
             if (unique_point_times.size() < static_cast<size_t>(options_.sequential_threshold)) {
                 // Sequential: Process timestamps one by one for small sizes
@@ -2488,8 +2487,8 @@ namespace  stateestimate{
 
                     const math::se3::Transformation T_i1(xi_i1); // Interpolated pose relative to T1
                     const math::se3::Transformation T_i0 = T_i1 * T1; // Pose in map frame
-                    const Eigen::Matrix4d T_mr = T_i0.inverse().matrix(); // Inverse pose matrix
-                    T_mr_cache_map[ts] = T_mr; // Cache pose
+                    const Eigen::Matrix4d Tb2m = T_i0.inverse().matrix(); // Inverse pose matrix
+                    Tb2m_cache_map[ts] = Tb2m; // Cache pose
                 }
             } else {
                 // Parallel: Process timestamps concurrently with TBB
@@ -2507,16 +2506,16 @@ namespace  stateestimate{
                                 omega.block<6, 6>(0, 12) * J_21_inv_curl_dw2;
                             const math::se3::Transformation T_i1(xi_i1); // Interpolated pose relative to T1
                             const math::se3::Transformation T_i0 = T_i1 * T1; // Pose in map frame
-                            const Eigen::Matrix4d T_mr = T_i0.inverse().matrix(); // Inverse pose matrix
+                            const Eigen::Matrix4d Tb2m = T_i0.inverse().matrix(); // Inverse pose matrix
                             tbb::concurrent_hash_map<double, Eigen::Matrix4d>::accessor acc;
                             temp_cache_map.insert(acc, ts);
-                            acc->second = T_mr; // Thread-safe insertion
+                            acc->second = Tb2m; // Thread-safe insertion
                         }
                     });
 
                 // Transfer from concurrent_hash_map to T_mr_cache_map sequentially
                 for (const auto& entry : temp_cache_map) {
-                    T_mr_cache_map[entry.first] = entry.second;
+                    Tb2m_cache_map[entry.first] = entry.second;
                 }
             }
 
@@ -2526,8 +2525,8 @@ namespace  stateestimate{
                 // Sequential: Transform keypoints one by one for small sizes
                 for (size_t jj = 0; jj < keypoints.size(); ++jj) {
                     auto& keypoint = keypoints[jj];
-                    const Eigen::Matrix4d& T_mr = T_mr_cache_map.at(keypoint.timestamp);
-                    keypoint.pt = T_mr.block<3, 3>(0, 0) * keypoint.raw_pt + T_mr.block<3, 1>(0, 3); // Transform raw point
+                    const Eigen::Matrix4d& Tb2m = Tb2m_cache_map.at(keypoint.timestamp);
+                    keypoint.pt = Tb2m.block<3, 3>(0, 0) * keypoint.raw_pt + Tb2m.block<3, 1>(0, 3); // Transform raw point
                 }
             } else {
                 // Parallel: Transform keypoints concurrently with TBB
@@ -2540,8 +2539,8 @@ namespace  stateestimate{
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, keypoints.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                         for (size_t jj = range.begin(); jj != range.end(); ++jj) {
                             auto& keypoint = temp_keypoints[jj];
-                            const Eigen::Matrix4d& T_mr = T_mr_cache_map.at(keypoint.timestamp);
-                            keypoint.pt = T_mr.block<3, 3>(0, 0) * keypoint.raw_pt + T_mr.block<3, 1>(0, 3); // Transform raw point
+                            const Eigen::Matrix4d& Tb2m = Tb2m_cache_map.at(keypoint.timestamp);
+                            keypoint.pt = Tb2m.block<3, 3>(0, 0) * keypoint.raw_pt + Tb2m.block<3, 1>(0, 3); // Transform raw point
                         }
                     });
 
@@ -2594,13 +2593,13 @@ namespace  stateestimate{
 #endif
             // #### This just transform the point from sensor to robot frame
             // sensor to robot frame is identity!
-            const Eigen::Matrix4d T_rs_mat = options_.T_sr.inverse(); // Inverse sensor-to-robot transformation
+            const Eigen::Matrix4d Ts2b_mat = options_.Tb2s.inverse(); // Inverse sensor-to-robot transformation
             
             if (keypoints.size() < static_cast<size_t>(options_.sequential_threshold)) {
                 // Sequential: Transform keypoints one by one for small sizes
                 for (size_t i = 0; i < keypoints.size(); ++i) {
                     auto& keypoint = keypoints[i];
-                    keypoint.raw_pt = T_rs_mat.block<3, 3>(0, 0) * keypoint.raw_pt + T_rs_mat.block<3, 1>(0, 3); // Transform raw point
+                    keypoint.raw_pt = Ts2b_mat.block<3, 3>(0, 0) * keypoint.raw_pt + Ts2b_mat.block<3, 1>(0, 3); // Transform raw point
                 }
             } else {
                 // Parallel: Transform keypoints concurrently with TBB
@@ -2613,7 +2612,7 @@ namespace  stateestimate{
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, keypoints.size(), options_.sequential_threshold),[&](const tbb::blocked_range<size_t>& range) {
                         for (size_t i = range.begin(); i != range.end(); ++i) {
                             auto& keypoint = temp_keypoints[i];
-                            keypoint.raw_pt = T_rs_mat.block<3, 3>(0, 0) * keypoint.raw_pt + T_rs_mat.block<3, 1>(0, 3); // Transform raw point
+                            keypoint.raw_pt = Ts2b_mat.block<3, 3>(0, 0) * keypoint.raw_pt + Ts2b_mat.block<3, 1>(0, 3); // Transform raw point
                         }
                     });
 
@@ -2638,17 +2637,17 @@ namespace  stateestimate{
 
         // Compute begin pose (at frame’s start timestamp)
         finalicp::traj::Time curr_begin_slam_time(static_cast<double>(trajectory_[index_frame].begin_timestamp));
-        const Eigen::Matrix4d begin_T_mr = SLAM_TRAJ->getPoseInterpolator(curr_begin_slam_time)->value().inverse().matrix();
-        const Eigen::Matrix4d begin_T_ms = begin_T_mr * options_.T_sr.inverse();
-        current_estimate.begin_t = begin_T_ms.block<3, 1>(0, 3); // Begin translation
-        current_estimate.begin_R = begin_T_ms.block<3, 3>(0, 0); // Begin rotation
+        const Eigen::Matrix4d begin_Tb2m = SLAM_TRAJ->getPoseInterpolator(curr_begin_slam_time)->value().inverse().matrix();
+        const Eigen::Matrix4d begin_Ts2m = begin_Tb2m * options_.Tb2s.inverse();
+        current_estimate.begin_t = begin_Ts2m.block<3, 1>(0, 3); // Begin translation
+        current_estimate.begin_R = begin_Ts2m.block<3, 3>(0, 0); // Begin rotation
 
         // Compute end pose (at frame’s end timestamp)
         finalicp::traj::Time curr_end_slam_time(static_cast<double>(trajectory_[index_frame].end_timestamp));
-        const Eigen::Matrix4d end_T_mr = SLAM_TRAJ->getPoseInterpolator(curr_end_slam_time)->value().inverse().matrix();
-        const Eigen::Matrix4d end_T_ms = end_T_mr * options_.T_sr.inverse();
-        current_estimate.end_t = end_T_ms.block<3, 1>(0, 3); // End translation
-        current_estimate.end_R = end_T_ms.block<3, 3>(0, 0); // End rotation
+        const Eigen::Matrix4d end_Tb2m = SLAM_TRAJ->getPoseInterpolator(curr_end_slam_time)->value().inverse().matrix();
+        const Eigen::Matrix4d end_Ts2m = end_Tb2m * options_.Tb2s.inverse();
+        current_estimate.end_t = end_Ts2m.block<3, 1>(0, 3); // End translation
+        current_estimate.end_R = end_Ts2m.block<3, 3>(0, 0); // End rotation
 
         // Compute velocities and accelerations
         Eigen::Matrix<double, 6, 1> v_begin = SLAM_TRAJ->getVelocityInterpolator(curr_begin_slam_time)->value();
@@ -2669,8 +2668,8 @@ namespace  stateestimate{
         // Iterates to refine the trajectory using point-to-plane alignment
         for (int iter = 0; iter < options_.num_iters_icp; iter++) {
 #ifdef DEBUG
-        // [DEBUG] Start of an ICP iteration
-        std::cout << "[ICP DEBUG] --- Iteration " << iter << " ---" << std::endl;
+            // [DEBUG] Start of an ICP iteration
+            std::cout << "[ICP DEBUG] --- Iteration " << iter << " ---" << std::endl;
 #endif
             // Initialize optimization problem based on swf_inside_icp
             const auto problem = [&]() -> finalicp::Problem::Ptr {
@@ -2779,8 +2778,8 @@ namespace  stateestimate{
                         Eigen::Vector3d closest_normal = weight * neighborhood.normal;
                         Eigen::Matrix3d W = (closest_normal * closest_normal.transpose() + 1e-5 * Eigen::Matrix3d::Identity());
                         const auto noise_model = finalicp::StaticNoiseModel<3>::MakeShared(W, NoiseType::INFORMATION);
-                        const auto &T_mr_intp_eval = T_mr_intp_eval_map.at(keypoint.timestamp);
-                        const auto error_func = p2p::p2pError(T_mr_intp_eval, closest_pt, keypoint.raw_pt);
+                        const auto &Tb2m_intp_eval = Tb2m_intp_eval_map.at(keypoint.timestamp);
+                        const auto error_func = p2p::p2pError(Tb2m_intp_eval, closest_pt, keypoint.raw_pt);
                         error_func->setTime(Time(keypoint.timestamp));
 
                         const auto loss_func = [this]() -> BaseLossFunc::Ptr {
@@ -2846,8 +2845,8 @@ namespace  stateestimate{
                                 Eigen::Vector3d closest_normal = weight * neighborhood.normal;
                                 Eigen::Matrix3d W = (closest_normal * closest_normal.transpose() + 1e-5 * Eigen::Matrix3d::Identity());
                                 const auto noise_model = finalicp::StaticNoiseModel<3>::MakeShared(W, NoiseType::INFORMATION);
-                                const auto &T_mr_intp_eval = T_mr_intp_eval_map.at(keypoint.timestamp);
-                                const auto error_func = p2p::p2pError(T_mr_intp_eval, closest_pt, keypoint.raw_pt);
+                                const auto &Tb2m_intp_eval = Tb2m_intp_eval_map.at(keypoint.timestamp);
+                                const auto error_func = p2p::p2pError(Tb2m_intp_eval, closest_pt, keypoint.raw_pt);
                                 error_func->setTime(Time(keypoint.timestamp));
 
                                 const auto loss_func = [this]() -> BaseLossFunc::Ptr {
@@ -2921,10 +2920,10 @@ namespace  stateestimate{
                 problem->addCostTerm(cost); // Add IMU bias prior cost terms
             }
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] problem: add T_mi_prior_cost_terms total: " << T_mi_prior_cost_terms.size() << std::endl;
+                std::cout << "[ICP DEBUG] problem: add Ti2m_prior_cost_terms total: " << Ti2m_prior_cost_terms.size() << std::endl;
 #endif
-            for (const auto& cost : T_mi_prior_cost_terms) {
-                problem->addCostTerm(cost); // Add T_mi prior cost terms
+            for (const auto& cost : Ti2m_prior_cost_terms) {
+                problem->addCostTerm(cost); // Add Ti2m prior cost terms
             }
 #ifdef DEBUG
                 std::cout << "[ICP DEBUG] problem: add p2p_super_cost_term." << std::endl;
@@ -3007,28 +3006,28 @@ namespace  stateestimate{
 
             // Update begin pose
             finalicp::traj::Time curr_begin_slam_time(static_cast<double>(trajectory_[index_frame].begin_timestamp));
-            const Eigen::Matrix4d begin_T_mr = SLAM_TRAJ->getPoseInterpolator(curr_begin_slam_time)->value().inverse().matrix();
-            const Eigen::Matrix4d begin_T_ms = begin_T_mr * options_.T_sr.inverse();
-            diff_trans += (current_estimate.begin_t - begin_T_ms.block<3, 1>(0, 3)).norm();
-            diff_rot += AngularDistance(current_estimate.begin_R, begin_T_ms.block<3, 3>(0, 0));
+            const Eigen::Matrix4d begin_Tb2m = SLAM_TRAJ->getPoseInterpolator(curr_begin_slam_time)->value().inverse().matrix();
+            const Eigen::Matrix4d begin_Ts2m = begin_Tb2m * options_.Tb2s.inverse();
+            diff_trans += (current_estimate.begin_t - begin_Ts2m.block<3, 1>(0, 3)).norm();
+            diff_rot += AngularDistance(current_estimate.begin_R, begin_Ts2m.block<3, 3>(0, 0));
 
 #ifdef DEBUG
             // [ADDED DEBUG] Print the change in the beginning pose translation
             std::cout << "[ICP DEBUG] Begin Translation | Old: " << current_estimate.begin_t.transpose()
-                    << " | New: " << begin_T_ms.block<3, 1>(0, 3).transpose() << std::endl;
+                    << " | New: " << begin_Ts2m.block<3, 1>(0, 3).transpose() << std::endl;
 #endif
 
             // Update end pose
             finalicp::traj::Time curr_end_slam_time(static_cast<double>(trajectory_[index_frame].end_timestamp));
-            const Eigen::Matrix4d end_T_mr = SLAM_TRAJ->getPoseInterpolator(curr_end_slam_time)->value().inverse().matrix();
-            const Eigen::Matrix4d end_T_ms = end_T_mr * options_.T_sr.inverse();
-            diff_trans += (current_estimate.end_t - end_T_ms.block<3, 1>(0, 3)).norm();
-            diff_rot += AngularDistance(current_estimate.end_R, end_T_ms.block<3, 3>(0, 0));
+            const Eigen::Matrix4d end_Tb2m = SLAM_TRAJ->getPoseInterpolator(curr_end_slam_time)->value().inverse().matrix();
+            const Eigen::Matrix4d end_Ts2m = end_Tb2m * options_.Tb2s.inverse();
+            diff_trans += (current_estimate.end_t - end_Ts2m.block<3, 1>(0, 3)).norm();
+            diff_rot += AngularDistance(current_estimate.end_R, end_Ts2m.block<3, 3>(0, 0));
 
 #ifdef DEBUG
             // [ADDED DEBUG] Print the change in the ending pose translation
             std::cout << "[ICP DEBUG] End Translation   | Old: " << current_estimate.end_t.transpose()
-                    << " | New: " << end_T_ms.block<3, 1>(0, 3).transpose() << std::endl;
+                    << " | New: " << end_Ts2m.block<3, 1>(0, 3).transpose() << std::endl;
 #endif
 
             // Update velocities
@@ -3049,15 +3048,15 @@ namespace  stateestimate{
 
             // Update mid pose
             finalicp::traj::Time curr_mid_slam_time(static_cast<double>(trajectory_[index_frame].getEvalTime()));
-            const Eigen::Matrix4d mid_T_mr = SLAM_TRAJ->getPoseInterpolator(curr_mid_slam_time)->value().inverse().matrix();
-            const Eigen::Matrix4d mid_T_ms = mid_T_mr * options_.T_sr.inverse();
-            current_estimate.setMidPose(mid_T_ms);
+            const Eigen::Matrix4d mid_Tb2m = SLAM_TRAJ->getPoseInterpolator(curr_mid_slam_time)->value().inverse().matrix();
+            const Eigen::Matrix4d mid_Ts2m = mid_Tb2m * options_.Tb2s.inverse();
+            current_estimate.setMidPose(mid_Ts2m);
 
             // Update current estimate
-            current_estimate.begin_R = begin_T_ms.block<3, 3>(0, 0);
-            current_estimate.begin_t = begin_T_ms.block<3, 1>(0, 3);
-            current_estimate.end_R = end_T_ms.block<3, 3>(0, 0);
-            current_estimate.end_t = end_T_ms.block<3, 1>(0, 3);
+            current_estimate.begin_R = begin_Ts2m.block<3, 3>(0, 0);
+            current_estimate.begin_t = begin_Ts2m.block<3, 1>(0, 3);
+            current_estimate.end_R = end_Ts2m.block<3, 3>(0, 0);
+            current_estimate.end_t = end_Ts2m.block<3, 1>(0, 3);
 
             // Update IMU biases (if enabled)
             if (options_.use_imu) {
@@ -3082,7 +3081,6 @@ namespace  stateestimate{
             std::cout << "[ICP DEBUG] State Change   | d_rot: " << diff_rot << ", d_trans: " << diff_trans << ", d_vel: " << diff_vel << ", d_acc: " << diff_acc << std::endl;
             std::cout << "[ICP DEBUG] End Pose (t)   | " << current_estimate.end_t.transpose() << std::endl;
 #endif
-
 
             // Check convergence
             if ((index_frame > 1) &&
@@ -3113,7 +3111,7 @@ namespace  stateestimate{
         // ################################################################################
 
         // Step 49: Add cost terms to the sliding window filter
-        // Includes state priors, point-to-plane, IMU, pose, and T_mi cost terms
+        // Includes state priors, point-to-plane, IMU, pose, and Ti2m cost terms
         SLAM_TRAJ->addPriorCostTerms(*sliding_window_filter_); // Add state priors (e.g., for initial state x_0)
 #ifdef DEBUG
             std::cout << "[ICP DEBUG] SLAM_TRAJ: addPriorCostTerms with sliding_window_filter_" << std::endl;
@@ -3147,10 +3145,10 @@ namespace  stateestimate{
             sliding_window_filter_->addCostTerm(imu_prior_cost); // Add IMU bias prior cost terms
         }
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] sliding_window_filter_: add T_mi_prior_cost_terms total: " << T_mi_prior_cost_terms.size() << std::endl;
+            std::cout << "[ICP DEBUG] sliding_window_filter_: add Ti2m_prior_cost_terms total: " << Ti2m_prior_cost_terms.size() << std::endl;
 #endif
-        for (const auto& T_mi_prior_cost : T_mi_prior_cost_terms) {
-            sliding_window_filter_->addCostTerm(T_mi_prior_cost); // Add T_mi prior cost terms
+        for (const auto& Ti2m_prior_cost : Ti2m_prior_cost_terms) {
+            sliding_window_filter_->addCostTerm(Ti2m_prior_cost); // Add Ti2m prior cost terms
         }
 #ifdef DEBUG
             std::cout << "[ICP DEBUG] sliding_window_filter_: add p2p_super_cost_term total." << std::endl;
@@ -3188,34 +3186,34 @@ namespace  stateestimate{
         }
         // solver.optimize(); // Optimize the sliding window filter if not done in ICP loop
 
-        // Step 51: Lock T_mi variables (if applicable)
+        // Step 51: Lock Ti2m variables (if applicable)
         // Ensures consistent IMU-to-map transformations for future variables
-        if (options_.T_mi_init_only && !use_T_mi_gt) {
+        if (options_.Ti2m_init_only && !use_Ti2m_gt) {
             size_t i = prev_trajectory_var_index + 1;
-            const auto prev_T_mi_value = prev_T_mi_var->value();
+            const auto prev_Ti2m_value = prev_Ti2m_var->value();
             for (; i < trajectory_vars_.size(); i++) {
-                trajectory_vars_[i].T_mi = finalicp::se3::SE3StateVar::MakeShared(prev_T_mi_value);
-                trajectory_vars_[i].T_mi->locked() = true; // Lock T_mi to prevent optimization
+                trajectory_vars_[i].Ti2m = finalicp::se3::SE3StateVar::MakeShared(prev_Ti2m_value);
+                trajectory_vars_[i].Ti2m->locked() = true; // Lock Ti2m to prevent optimization
             }
         }
 
         // Step 52: Update the current estimate
         // Computes poses, velocities, accelerations, and covariance for begin, mid, and end timestamps
-        const Eigen::Matrix4d curr_begin_T_mr = SLAM_TRAJ->getPoseInterpolator(curr_begin_slam_time)->value().inverse().matrix();
-        const Eigen::Matrix4d curr_begin_T_ms = curr_begin_T_mr * options_.T_sr.inverse();
+        const Eigen::Matrix4d curr_begin_Tb2m = SLAM_TRAJ->getPoseInterpolator(curr_begin_slam_time)->value().inverse().matrix();
+        const Eigen::Matrix4d curr_begin_Ts2m = curr_begin_Tb2m * options_.Tb2s.inverse();
 
-        const Eigen::Matrix4d curr_end_T_mr = SLAM_TRAJ->getPoseInterpolator(curr_end_slam_time)->value().inverse().matrix();
-        const Eigen::Matrix4d curr_end_T_ms = curr_end_T_mr * options_.T_sr.inverse();
+        const Eigen::Matrix4d curr_end_Tb2m = SLAM_TRAJ->getPoseInterpolator(curr_end_slam_time)->value().inverse().matrix();
+        const Eigen::Matrix4d curr_end_Ts2m = curr_end_Tb2m * options_.Tb2s.inverse();
 
         finalicp::traj::Time curr_mid_slam_time(static_cast<double>(trajectory_[index_frame].getEvalTime()));
-        const Eigen::Matrix4d mid_T_mr = SLAM_TRAJ->getPoseInterpolator(curr_mid_slam_time)->value().inverse().matrix();
-        const Eigen::Matrix4d mid_T_ms = mid_T_mr * options_.T_sr.inverse();
-        current_estimate.setMidPose(mid_T_ms);
+        const Eigen::Matrix4d mid_Tb2m = SLAM_TRAJ->getPoseInterpolator(curr_mid_slam_time)->value().inverse().matrix();
+        const Eigen::Matrix4d mid_Ts2m = mid_Tb2m * options_.Tb2s.inverse();
+        current_estimate.setMidPose(mid_Ts2m);
 
         // Update debug fields (for plotting)
         current_estimate.mid_w = SLAM_TRAJ->getVelocityInterpolator(curr_mid_slam_time)->value();
         current_estimate.mid_dw = SLAM_TRAJ->getAccelerationInterpolator(curr_mid_slam_time)->value();
-        current_estimate.mid_T_mi = trajectory_vars_[prev_trajectory_var_index].T_mi->value().matrix();
+        current_estimate.mid_Ti2m = trajectory_vars_[prev_trajectory_var_index].Ti2m->value().matrix();
          // ADD THIS LINE
 
 //         finalicp::Covariance covariance(solver);
@@ -3225,10 +3223,10 @@ namespace  stateestimate{
 //         current_estimate.mid_state_cov = SLAM_TRAJ->getCovariance(covariance, trajectory_vars_[prev_trajectory_var_index].time);
 
         // Update begin and end poses
-        current_estimate.begin_R = curr_begin_T_ms.block<3, 3>(0, 0);
-        current_estimate.begin_t = curr_begin_T_ms.block<3, 1>(0, 3);
-        current_estimate.end_R = curr_end_T_ms.block<3, 3>(0, 0);
-        current_estimate.end_t = curr_end_T_ms.block<3, 1>(0, 3);
+        current_estimate.begin_R = curr_begin_Ts2m.block<3, 3>(0, 0);
+        current_estimate.begin_t = curr_begin_Ts2m.block<3, 1>(0, 3);
+        current_estimate.end_R = curr_end_Ts2m.block<3, 3>(0, 0);
+        current_estimate.end_t = curr_end_Ts2m.block<3, 1>(0, 3);
 
         ///################################################################################
 
@@ -3251,7 +3249,7 @@ namespace  stateestimate{
             const auto bias_intp_eval = finalicp::vspace::VSpaceInterpolator<6>::MakeShared(curr_mid_slam_time, trajectory_vars_[i].imu_biases, trajectory_vars_[i].time, trajectory_vars_[i + 1].imu_biases, trajectory_vars_[i + 1].time);
             current_estimate.mid_b = bias_intp_eval->value();
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] mid_T_mi: " << current_estimate.mid_T_mi << std::endl;
+            std::cout << "[ICP DEBUG] mid_Ti2m: " << current_estimate.mid_Ti2m << std::endl;
             std::cout << "[ICP DEBUG] b_begin: " << trajectory_vars_[i].imu_biases->value().transpose() << std::endl;
             std::cout << "[ICP DEBUG] b_end: " << trajectory_vars_[i + 1].imu_biases->value().transpose() << std::endl;
 #endif

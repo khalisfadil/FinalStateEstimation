@@ -37,8 +37,8 @@ namespace stateestimate {
                 // Sensor and Vehicle Configuration
                 // ----------------------------------------------------------------------------------
                 
-                /// Fixed transformation from the robot's base frame to the sensor's frame (e.g., LiDAR). This is the extrinsic calibration.
-                Eigen::Matrix<double, 4, 4> T_sr = Eigen::Matrix<double, 4, 4>::Identity();
+                /// Fixed transformation from the robot's body frame to the sensor's frame (e.g., LiDAR). This is the extrinsic calibration.
+                Eigen::Matrix<double, 4, 4> Tb2s = Eigen::Matrix<double, 4, 4>::Identity();
 
                 // ----------------------------------------------------------------------------------
                 // Continuous-Time Trajectory Model Parameters
@@ -140,23 +140,23 @@ namespace stateestimate {
                 double gyro_loss_sigma = 1.0;
 
                 // ----------------------------------------------------------------------------------
-                // IMU-Map Transformation (T_mi) Parameters
+                // IMU-Map Transformation (Ti2m) Parameters
                 // ----------------------------------------------------------------------------------
 
-                /// If true, the IMU-to-Map extrinsic ($T_{mi}$) is only optimized at the beginning and then held fixed.
-                bool T_mi_init_only = true;
-                /// If true, use a ground truth value for the IMU-to-Map extrinsic ($T_{mi}$) instead of estimating it.
-                bool use_T_mi_gt = false;
+                /// If true, the IMU-to-Map extrinsic ($T_{i2m}$) is only optimized at the beginning and then held fixed.
+                bool Ti2m_init_only = true;
+                /// If true, use a ground truth value for the IMU-to-Map extrinsic ($T_{i2m}$) instead of estimating it.
+                bool use_Ti2m_gt = false;
                 /// The ground truth IMU-to-Map extrinsic, represented as a 6D vector (translation + rotation).
-                Eigen::Matrix<double, 6, 1> xi_ig = Eigen::Matrix<double, 6, 1>::Ones();
-                /// Initial covariance for the $T_{mi}$ estimation.
-                Eigen::Matrix<double, 6, 1> T_mi_init_cov = Eigen::Matrix<double, 6, 1>::Ones();
+                Eigen::Matrix<double, 6, 1> xi_g2i = Eigen::Matrix<double, 6, 1>::Ones();
+                /// Initial covariance for the $T_{i2m}$ estimation.
+                Eigen::Matrix<double, 6, 1> Ti2m_init_cov = Eigen::Matrix<double, 6, 1>::Ones();
                 /// Process noise for the IMU-to-Map extrinsic ($T_{mi}$) if it's continuously estimated.
                 Eigen::Matrix<double, 6, 1> qg_diag = Eigen::Matrix<double, 6, 1>::Ones();
-                /// Prior covariance on $T_{mi}$ for frames after initialization.
-                Eigen::Matrix<double, 6, 1> T_mi_prior_cov = Eigen::Matrix<double, 6, 1>::Ones();
+                /// Prior covariance on $T_{i2m}$ for frames after initialization.
+                Eigen::Matrix<double, 6, 1> Ti2m_prior_cov = Eigen::Matrix<double, 6, 1>::Ones();
                 /// Whether to apply the $T_{mi}$ prior after the initial frames.
-                bool use_T_mi_prior_after_init = false;
+                bool use_Ti2m_prior_after_init = false;
                 /// Whether to apply a prior on the IMU biases after the initial frames.
                 bool use_bias_prior_after_init = false;
 
@@ -164,7 +164,7 @@ namespace stateestimate {
                 // Initial State Priors (for the very first frame)
                 // ----------------------------------------------------------------------------------
                 /// Programmatically set initial pose mean. Use setInitialPose() to populate this.
-                Eigen::Matrix<double, 4, 4> T_rm_init = Eigen::Matrix<double, 4, 4>::Identity();
+                Eigen::Matrix<double, 4, 4> Tm2b_init = Eigen::Matrix<double, 4, 4>::Identity();
                 /// Initial uncertainty (covariance, $P_0$) for the robot's pose.
                 Eigen::Matrix<double, 6, 1> p0_pose = Eigen::Matrix<double, 6, 1>::Ones();
                 /// Initial uncertainty (covariance, $P_0$) for the robot's velocity.
@@ -207,20 +207,20 @@ namespace stateestimate {
 
         private:
             Options options_;
-            finalicp::se3::SE3StateVar::Ptr T_sr_var_ = nullptr;  // robot to sensor transformation as a slam variable
+            finalicp::se3::SE3StateVar::Ptr Tb2s_var_ = nullptr;  // robot to sensor transformation as a slam variable
 
             struct TrajectoryVar {
                 TrajectoryVar() = default;
                 TrajectoryVar(const finalicp::traj::Time& t, const finalicp::se3::SE3StateVar::Ptr& T,
                             const finalicp::vspace::VSpaceStateVar<6>::Ptr& w, const finalicp::vspace::VSpaceStateVar<6>::Ptr& dw,
-                            const finalicp::vspace::VSpaceStateVar<6>::Ptr& b, const finalicp::se3::SE3StateVar::Ptr& T_m_i)
-                    : time(t), T_rm(T), w_mr_inr(w), dw_mr_inr(dw), imu_biases(b), T_mi(T_m_i) {}
+                            const finalicp::vspace::VSpaceStateVar<6>::Ptr& b, const finalicp::se3::SE3StateVar::Ptr& Ti2m)
+                    : time(t), Tm2b(T), wb2m_inr(w), dwb2m_inr(dw), imu_biases(b), Ti2m(Ti2m) {}
                 finalicp::traj::Time time;
-                finalicp::se3::SE3StateVar::Ptr T_rm;
-                finalicp::vspace::VSpaceStateVar<6>::Ptr w_mr_inr;
-                finalicp::vspace::VSpaceStateVar<6>::Ptr dw_mr_inr;
+                finalicp::se3::SE3StateVar::Ptr Tm2b;
+                finalicp::vspace::VSpaceStateVar<6>::Ptr wb2m_inr;
+                finalicp::vspace::VSpaceStateVar<6>::Ptr dwb2m_inr;
                 finalicp::vspace::VSpaceStateVar<6>::Ptr imu_biases;
-                finalicp::se3::SE3StateVar::Ptr T_mi;
+                finalicp::se3::SE3StateVar::Ptr Ti2m;
             };
 
             std::vector<TrajectoryVar> trajectory_vars_;

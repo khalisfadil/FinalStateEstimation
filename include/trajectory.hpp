@@ -145,9 +145,9 @@ namespace stateestimate {
         Eigen::Vector3d end_t = Eigen::Vector3d::Zero();       ///< Translation at the end of the frame.
 
         // --- End-of-Frame Covariances (Uncertainty) ---
-        Eigen::Matrix<double, 6, 6> end_T_rm_cov = Eigen::Matrix<double, 6, 6>::Identity();         ///< Covariance of the end pose.
-        Eigen::Matrix<double, 6, 6> end_w_mr_inr_cov = Eigen::Matrix<double, 6, 6>::Identity();     ///< Covariance of the end velocity.
-        Eigen::Matrix<double, 6, 6> end_dw_mr_inr_cov = Eigen::Matrix<double, 6, 6>::Identity();    ///< Covariance of the end acceleration.
+        Eigen::Matrix<double, 6, 6> end_Tm2b_cov = Eigen::Matrix<double, 6, 6>::Identity();         ///< Covariance of the end pose.
+        Eigen::Matrix<double, 6, 6> end_wb2m_inr_cov = Eigen::Matrix<double, 6, 6>::Identity();     ///< Covariance of the end velocity.
+        Eigen::Matrix<double, 6, 6> end_dwb2m_inr_cov = Eigen::Matrix<double, 6, 6>::Identity();    ///< Covariance of the end acceleration.
         Eigen::Matrix<double, 18, 18> end_state_cov = Eigen::Matrix<double, 18, 18>::Identity();    ///< Covariance of the full end-state [Pose, Vel, Bias].
 
         // --- Mid-Frame State Variables (Estimated at evaluation time) ---
@@ -155,7 +155,7 @@ namespace stateestimate {
         Eigen::Matrix<double, 6, 1> mid_dw = Eigen::Matrix<double, 6, 1>::Zero();   ///< Spatial Acceleration (linear and angular) at mid-frame.
         Eigen::Matrix<double, 6, 1> mid_b = Eigen::Matrix<double, 6, 1>::Zero();    ///< IMU biases (accelerometer and gyroscope) at mid-frame.
         Eigen::Matrix<double, 18, 18> mid_state_cov = Eigen::Matrix<double, 18, 18>::Identity();  ///< Covariance of the mid-frame state.
-        Eigen::Matrix4d mid_T_mi = Eigen::Matrix4d::Identity();  ///< Transformation from IMU to Map frame at mid-frame.
+        Eigen::Matrix4d mid_Ti2m = Eigen::Matrix4d::Identity();  ///< Transformation from IMU to Map frame at mid-frame.
 
         // --- Raw Sensor Data ---
         std::vector<Point3D> points;                           ///< LiDAR point cloud captured during this frame.

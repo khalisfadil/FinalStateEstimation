@@ -134,4 +134,48 @@ Montag, 4. August 2025 15:27
     - Trajectory lidarinertialodom::trajectory() it calcualte T_ms
     - in update map also has transformation sensor to robot
     - at line 1915. TODO; to find the smoking gun on why no IMU data.
-    - 
+--------------------------------------------------------------------------------------------------------------------------
+ Donnerstag, 7. August 2025 17:23
+    - TODO try build in target 7 and look if its working.
+    - TODO test with Berlin data
+    - TODO vizualization?
+    - TODO upload GT communication file on target1
+    - TODO build docker system?
+    - TODO check result with gelhsdorffahre and BERLIN data IMPORTANT!!
+    - TODO Identify if its working.
+--------------------------------------------------------------------------------------------------------------------------
+Freitag, 8. August 2025 10:28
+    - DONE check if vizualization from steam-icp using ros2 either only update point for every frame or update the whole map for every frame.
+    - ANS - steam icp update the whole map each frame. idea, update periodically or update only when the vehicle move certain threshold.
+    - TODO check transformation is correctly figured in lidar 
+    - Practical Equivalence
+    $ T_{\text{target} \leftarrow \text{source}} $: Most explicit, widely used in ROS tf and calibration literature (e.g., “3D LIDAR-Camera Extrinsic Calibration Using an Arbitrary Trihedron”). Ideal for documentation and communication.
+    $ T_{ts} $: Compact, common in code and transform naming (e.g., ROS transform frames like base_link_to_lidar). Less verbose but assumes context for direction.
+    $ T^{\text{t}}_{\text{s}} $: Formal, used in mathematical papers and some robotics contexts. Slightly less common in software but clear in academic writing.
+    -Rotation around the X-axis (Roll):
+    Rx​(ϕ)=​    1 0 0 
+            ​0 cosϕ sinϕ​
+            0 −sinϕ cosϕ​​
+
+    Rotation around the Y-axis (Pitch):
+    Ry​(θ)=     ​cosθ 0 −sinθ
+            ​       0 1 0​
+                sinθ 0 cosθ​​
+
+    Rotation around the Z-axis (Yaw):
+    Rz​(ψ)=      cosψ sinψ 0 
+                ​−sinψ cosψ 0​ 
+                    0 0 1​​
+    Direct Explanation
+
+    - T_rm: Denotes the transformation from map (m, source) to robot (r, target), i.e., $ T_{r \leftarrow m} $. Subscript order is target-source (r m).
+    - w_mr_inr (and dw_mr_inr): Denotes the twist (velocity) of the robot (r, moving/target) relative to the map (m, fixed/source), expressed in the robot frame (in r). Subscript order is source-target (m r), with "inr" specifying the body-frame expression.
+    - Significance: The flip ensures consistency with:
+
+    - Pose composition: $ T_{r \leftarrow m} $ maps points from map to robot (chainable as left-multiplication).
+    - Twist integration: $ {}^r \xi_{m \leftarrow r} $ integrates body-fixed motion (right-multiplication in exponentials).
+    - Without the flip, notations would mismatch kinematic equations (e.g., $ \dot{T} = T \hat{\xi} $ for body twists), leading to error-prone code.
+    - TODO finish change the notation and proceed for testing
+--------------------------------------------------------------------------------------------------------------------------
+Montag, 11. August 2025 11:50
+    
