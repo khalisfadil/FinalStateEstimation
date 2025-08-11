@@ -795,26 +795,24 @@ namespace  stateestimate{
         timer.emplace_back("icp ................................ ", std::make_unique<finalicp::Stopwatch<>>(false));
         timer.emplace_back("updateMap .......................... ", std::make_unique<finalicp::Stopwatch<>>(false));
 #endif
-
-        // Step 1: Validate input point cloud
+        // Step 1: Add new frame to trajectory
+        // Create a new entry in the trajectory vector for the current frame
+        int index_frame = trajectory_.size(); // start from 0,1,2,3,4
+        trajectory_.emplace_back();
+        // Step 2: Validate input point cloud
         // Check if the input point cloud is empty; return failure if so
         if (const_frame.pointcloud.empty()) {
 #ifdef DEBUG
-            std::cout << "[REG DEBUG] CRITICAL: Frame " << trajectory_.size() << " REJECTED: Input point cloud is empty." << std::endl;
+            std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "CRITICAL: Frame " << trajectory_.size() << " REJECTED: Input point cloud is empty." << std::endl;
 #endif
             summary.success = false;
             return summary;
         }
-
-        // Step 2: Add new frame to trajectory
-        // Create a new entry in the trajectory vector for the current frame
-        int index_frame = trajectory_.size(); // start from 0,1,2,3,4
-        trajectory_.emplace_back();
-
+        
 #ifdef DEBUG
         // [DEBUG] Announce the start of processing for a new frame
-        std::cout << "[REG DEBUG] Starting RegisterFrame for index " << index_frame << std::endl;
-        std::cout << "[REG DEBUG] Input pointcloud size: " << const_frame.pointcloud.size() << std::endl;
+        std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "Starting RegisterFrame for index " << index_frame << std::endl;
+        std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "Input pointcloud size: " << const_frame.pointcloud.size() << std::endl;
 #endif
 
         // Step 3: Initialize frame metadata
@@ -824,7 +822,7 @@ namespace  stateestimate{
 #ifdef DEBUG
         // [DEBUG] Check the timestamps immediately after they are calculated
         // std::cout << std::fixed << std::setprecision(12) 
-        //           << "[REG DEBUG] After initializeTimestamp: begin=" << trajectory_[index_frame].begin_timestamp
+        //           << "[REG DEBUG | Frame " << index_frame << "]" << "After initializeTimestamp: begin=" << trajectory_[index_frame].begin_timestamp
         //           << ", end=" << trajectory_[index_frame].end_timestamp << std::endl;
 #endif
 
@@ -832,12 +830,12 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         if (index_frame == 0) {
-            std::cout << "[REG DEBUG] Frame 0 Initial Pose (R_ms):\n" << trajectory_[index_frame].end_R  << std::endl;
-            std::cout << "[REG DEBUG] Frame 0 Initial Pose (t_ms):\n" << trajectory_[index_frame].end_t.transpose() << std::endl;
+            std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "Frame 0 Initial Pose (R_ms):\n" << trajectory_[index_frame].end_R  << std::endl;
+            std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "Frame 0 Initial Pose (t_ms):\n" << trajectory_[index_frame].end_t.transpose() << std::endl;
         }
         // [DEBUG] Check the initial motion prediction
         if (!trajectory_[index_frame].begin_R.allFinite() || !trajectory_[index_frame].end_R.allFinite()) {
-            std::cout << "[REG DEBUG] CRITICAL: Non-finite rotation after initializeMotion!" << std::endl;
+            std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "CRITICAL: Non-finite rotation after initializeMotion!" << std::endl;
         }
 #endif
 
@@ -851,7 +849,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         if (!timer.empty()) timer[0].second->stop();
-        // std::cout << "[REG DEBUG] After initializeFrame, size is: " << frame.size() << std::endl;
+        // std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "After initializeFrame, size is: " << frame.size() << std::endl;
 #endif
 
         // Step 5: Process frame based on frame index
@@ -872,7 +870,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
             if (!timer.empty()) timer[1].second->stop();
-            std::cout << "[REG DEBUG] After grid_sampling, keypoints size: " << keypoints.size() << std::endl;
+            std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "After grid_sampling, keypoints size: " << keypoints.size() << std::endl;
 #endif
             // Step 5b: Perform Iterative Closest Point (ICP) registration
             // Align current frame with previous frames using IMU and pose data
@@ -888,19 +886,19 @@ namespace  stateestimate{
 #ifdef DEBUG
             if (!timer.empty()) timer[2].second->stop();
             // [DEBUG] Report ICP result immediately
-            std::cout << "[REG DEBUG] ICP finished. Success: " << (summary.success ? "true" : "false") << std::endl;
+            std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "ICP finished. Success: " << (summary.success ? "true" : "false") << std::endl;
 #endif
             summary.keypoints = keypoints;
             if (!summary.success) {
 #ifdef DEBUG
-                std::cout << "[REG DEBUG] ICP failed for frame " << index_frame << ". Returning early." << std::endl;
+                std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "ICP failed for frame " << index_frame << ". Returning early." << std::endl;
 #endif
                 return summary;}
         } else { // !!!!!!!!!!! this is responsible for initial frame 0 ######################
 
 #ifdef DEBUG
             // [DEBUG] Announce first frame initialization
-            std::cout << "[REG DEBUG] Performing first frame (index 0) initialization." << std::endl;
+            std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "Performing first frame (index 0) initialization." << std::endl;
 #endif
             // Step 5c: Initialize first frame
             // Set up initial state and transformations for the trajectory start
@@ -947,8 +945,8 @@ namespace  stateestimate{
                                         std::move(end_dwb2m_inr_var), std::move(end_imu_biases), std::move(end_Ti2m_var));
 
 #ifdef DEBUG
-            std::cout << "[REG DEBUG] Frame 0: Created " << trajectory_vars_.size() << " initial state variables." << std::endl;
-            std::cout << "[REG DEBUG] Frame 0 timestamps: begin=" << std::fixed << begin_time << ", end=" << end_time << std::endl;
+            std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "Frame 0: Created " << trajectory_vars_.size() << " initial state variables." << std::endl;
+            std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "Frame 0 timestamps: begin=" << std::fixed << begin_time << ", end=" << end_time << std::endl;
 #endif
             Eigen::Matrix<double, 6, 1> xi_i2m = initialize_gravity(const_frame.imu_data_vec);
             begin_Ti2m_var->update(xi_i2m);
@@ -984,20 +982,20 @@ namespace  stateestimate{
 
         if (index_frame == 0) {
 #ifdef DEBUG
-            std::cout << "[REG DEBUG] Updating map for frame 0." << std::endl;
+            std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "Updating map for frame 0." << std::endl;
 #endif
             updateMap(index_frame, index_frame);                                        //####!!! 7
 
         } else if ((index_frame - options_.delay_adding_points) > 0) {
 #ifdef DEBUG
-            std::cout << "[REG DEBUG] Updating map using frame " << index_frame - options_.delay_adding_points << "." << std::endl;
+            std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "Updating map using frame " << index_frame - options_.delay_adding_points << "." << std::endl;
 #endif
             updateMap(index_frame, index_frame - options_.delay_adding_points);
         }
 
 #ifdef DEBUG
         if (!timer.empty()) timer[3].second->stop();
-        std::cout << "[REG DEBUG] Map size is now: " << map_.size() << std::endl;
+        std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "Map size is now: " << map_.size() << std::endl;
 #endif
 
         // Step 8: Correct point cloud positions
@@ -1054,11 +1052,11 @@ namespace  stateestimate{
         // Step 10: Output debug timers
         // Print timing information if debug mode is enabled
 #ifdef DEBUG
-            std::cout << "[REG DEBUG] OUTER LOOP TIMERS" << std::endl;
+            std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "OUTER LOOP TIMERS" << std::endl;
             for (size_t i = 0; i < timer.size(); i++) {
                 std::cout << "Elapsed " << timer[i].first << *(timer[i].second) << std::endl;
             }
-            std::cout << "[REG DEBUG] Finished RegisterFrame for index " << index_frame << std::endl;
+            std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "Finished RegisterFrame for index " << index_frame << std::endl;
 #endif
         return summary;
     }
@@ -1113,7 +1111,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
             // [ADDED DEBUG] Print all calculated timestamps before assignment
-            std::cout << "[INIT TS DEBUG] Frame " << index_frame << ": min=" << std::fixed << min_timestamp
+            std::cout << "[INIT TS DEBUG | Frame " << index frame << "] " << "Frame " << index_frame << ": min=" << std::fixed << min_timestamp
                     << ", max=" << max_timestamp << ", mid=" << mid_timestamp << std::endl;
 #endif
 
@@ -1140,7 +1138,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [ADDED DEBUG] Announce entry into the function
-        std::cout << "[INIT MOTION DEBUG] Initializing motion for frame " << index_frame << ". ---" << std::endl;
+        std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Initializing motion for frame " << index_frame << ". ---" << std::endl;
 #endif
 
         if (index_frame == 0) { //MAIN ALLERT as T_sr is identity. T_ms is exactly same as T_mr
@@ -1172,12 +1170,12 @@ namespace  stateestimate{
 
 #ifdef DEBUG
             // [ADDED DEBUG] Print the initial transformations for Frame 0
-            std::cout << "[INIT MOTION DEBUG] Frame 0: Using initial pose from options." << std::endl;
-            std::cout << "[INIT MOTION DEBUG] Frame 0: Initial Sensor Pose (Ts2m):\n" << Ts2m << std::endl;
+            std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Frame 0: Using initial pose from options." << std::endl;
+            std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Frame 0: Initial Sensor Pose (Ts2m):\n" << Ts2m << std::endl;
             if (!Ts2m.allFinite()) {
-                std::cout << "[INIT MOTION DEBUG] CRITICAL: Initial pose Ts2m is non-finite (NaN or inf)!" << std::endl;
+                std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "CRITICAL: Initial pose Ts2m is non-finite (NaN or inf)!" << std::endl;
             } else {
-                std::cout << "[INIT MOTION DEBUG] Initial pose Ts2m is finite." << std::endl;
+                std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Initial pose Ts2m is finite." << std::endl;
             }
 #endif
             // 5. Set the trajectory's initial pose.
@@ -1195,13 +1193,13 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [ADDED DEBUG] Confirm the pose was copied for Frame 1
-        std::cout << "[INIT MOTION DEBUG] Frame 1: Copying pose from end of Frame 0." << std::endl;
-        std::cout << "[INIT MOTION DEBUG] Frame 1: Initial Pose (Rotation):\n" << trajectory_[index_frame].begin_R << std::endl;
-        std::cout << "[INIT MOTION DEBUG] Frame 1: Initial Pose (Translation): " << trajectory_[index_frame].begin_t.transpose() << std::endl;
+        std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Frame 1: Copying pose from end of Frame 0." << std::endl;
+        std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Frame 1: Initial Pose (Rotation):\n" << trajectory_[index_frame].begin_R << std::endl;
+        std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Frame 1: Initial Pose (Translation): " << trajectory_[index_frame].begin_t.transpose() << std::endl;
         if (!trajectory_[index_frame].begin_R.allFinite() || !trajectory_[index_frame].end_R.allFinite() || !trajectory_[index_frame].begin_t.allFinite() || !trajectory_[index_frame].end_t.allFinite()) {
-            std::cout << "[INIT MOTION DEBUG] CRITICAL: Initial pose Ts2m is non-finite (NaN or inf)!" << std::endl;
+            std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "CRITICAL: Initial pose Ts2m is non-finite (NaN or inf)!" << std::endl;
         } else {
-            std::cout << "[INIT MOTION DEBUG] Initial pose T_ms is finite." << std::endl;
+            std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Initial pose T_ms is finite." << std::endl;
         }
 #endif
         
@@ -1224,13 +1222,13 @@ namespace  stateestimate{
 
 #ifdef DEBUG
             // [ADDED DEBUG] Show the extrapolated motion
-            std::cout << "[INIT MOTION DEBUG] Frame " << index_frame << ": Extrapolating motion." << std::endl;
-            std::cout << "[INIT MOTION DEBUG] Relative Motion (t_rel): " << t_rel.transpose() << std::endl;
-            std::cout << "[INIT MOTION DEBUG] Extrapolated End Pose (Translation): " << trajectory_[index_frame].end_t.transpose() << std::endl;
+            std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Frame " << index_frame << ": Extrapolating motion." << std::endl;
+            std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Relative Motion (t_rel): " << t_rel.transpose() << std::endl;
+            std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Extrapolated End Pose (Translation): " << trajectory_[index_frame].end_t.transpose() << std::endl;
             if (!trajectory_[index_frame].begin_R.allFinite() || !trajectory_[index_frame].end_R.allFinite() || !trajectory_[index_frame].begin_t.allFinite() || !trajectory_[index_frame].end_t.allFinite()) {
-                std::cout << "--- [INIT MOTION DEBUG] CRITICAL: Initial pose T_ms is non-finite (NaN or inf)! ---" << std::endl;
+                std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "CRITICAL: Initial pose T_ms is non-finite (NaN or inf)!" << std::endl;
             } else {
-                std::cout << "--- [INIT MOTION DEBUG] Initial pose T_ms is finite. ---" << std::endl;
+                std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Initial pose T_ms is finite." << std::endl;
             }
 #endif
         }
@@ -1253,7 +1251,7 @@ namespace  stateestimate{
         // this is critical as the code assume T_sr is identity. if T_sr is not identity then we need to add some more algorithm.
 #ifdef DEBUG
         // [ADDED DEBUG] Announce entry and check input size
-        std::cout << "[FRAME INIT DEBUG] Initializing frame " << index_frame << " with " << const_frame.size() << " input points." << std::endl;
+        std::cout << "[FRAME INIT DEBUG | Frame " << index_frame << "] " << "Initializing frame " << index_frame << " with " << const_frame.size() << " input points." << std::endl;
 #endif
 
         // Initialize point cloud
@@ -1267,7 +1265,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [ADDED DEBUG] Show size after subsampling
-        std::cout << "[FRAME INIT DEBUG] Frame size after subsampling: " << frame.size() << " points." << std::endl;
+        std::cout << "[FRAME INIT DEBUG | Frame " << index_frame << "] " << "Frame size after subsampling: " << frame.size() << " points." << std::endl;
 #endif
 
         // Shuffle points to avoid bias
@@ -1280,9 +1278,9 @@ namespace  stateestimate{
 #ifdef DEBUG
         // [ADDED DEBUG] Check input poses for validity before using them
         if (!traj.begin_R.allFinite() || !traj.end_R.allFinite() || !traj.begin_t.allFinite() || !traj.end_t.allFinite()) {
-            std::cout << "[FRAME INIT DEBUG] CRITICAL: Input trajectory poses for deskewing are non-finite!" << std::endl;
+            std::cout << "[FRAME INIT DEBUG | Frame " << index_frame << "] " << "CRITICAL: Input trajectory poses for deskewing are non-finite!" << std::endl;
         }
-        std::cout << "[FRAME INIT DEBUG] Deskewing with begin_t: " << traj.begin_t.transpose() << " and end_t: " << traj.end_t.transpose() << std::endl;
+        std::cout << "[FRAME INIT DEBUG | Frame " << index_frame << "] " << "Deskewing with begin_t: " << traj.begin_t.transpose() << " and end_t: " << traj.end_t.transpose() << std::endl;
 #endif
 
         auto q_begin = Eigen::Quaterniond(traj.begin_R);
@@ -1320,13 +1318,13 @@ namespace  stateestimate{
         bool all_points_finite = true;
         for (const auto& point : frame) {
             if (!point.pt.allFinite()) {
-                std::cout << "[FRAME INIT DEBUG] CRITICAL: A deskewed point is non-finite (NaN or inf)!" << std::endl;
+                std::cout << "[FRAME INIT DEBUG | Frame " << index_frame << "] " << "CRITICAL: A deskewed point is non-finite (NaN or inf)!" << std::endl;
                 all_points_finite = false;
                 break;
             }
         }
         if (all_points_finite) {
-            std::cout << "[FRAME INIT DEBUG] All " << frame.size() << " deskewed points are finite." << std::endl;
+            std::cout << "[FRAME INIT DEBUG | Frame " << index_frame << "] " << "All " << frame.size() << " deskewed points are finite." << std::endl;
         }
 #endif
 
@@ -1354,8 +1352,8 @@ namespace  stateestimate{
     
 #ifdef DEBUG
         // [DEBUG] Announce the start of the function and its parameters
-        std::cout << "[MAP DEBUG] Starting updateMap" << std::endl;
-        std::cout << "[MAP DEBUG] Current frame index: " << index_frame << ", Updating with data from frame: " << update_frame << std::endl;
+        std::cout << "[MAP DEBUG | Frame " << index_frame << "] " << "Starting updateMap" << std::endl;
+        std::cout << "[MAP DEBUG | Frame " << index_frame << "] " << "Current frame index: " << index_frame << ", Updating with data from frame: " << update_frame << std::endl;
 #endif
 
         // Map parameters
@@ -1367,13 +1365,13 @@ namespace  stateestimate{
         auto& frame = trajectory_[update_frame].points;
         if (frame.empty()) {
 #ifdef DEBUG
-            std::cout << "[MAP DEBUG] Frame " << update_frame << " is empty. Nothing to add to map. Returning." << std::endl;
+            std::cout << "[MAP DEBUG | Frame " << index_frame << "] " << "Frame " << update_frame << " is empty. Nothing to add to map. Returning." << std::endl;
 #endif
             return; // No points to add
         }
 
 #ifdef DEBUG
-        std::cout << "[MAP DEBUG] Frame " << update_frame << " contains " << frame.size() << " points to process." << std::endl;
+        std::cout << "[MAP DEBUG | Frame " << index_frame << "] " << "Frame " << update_frame << " contains " << frame.size() << " points to process." << std::endl;
 #endif
 
         // Motion correction with SLAM interpolation
@@ -1398,9 +1396,9 @@ namespace  stateestimate{
         }
 
 #ifdef DEBUG
-        std::cout << "[MAP DEBUG] Building interpolation trajectory from state index " << start_idx 
+        std::cout << "[MAP DEBUG | Frame " << index_frame << "] " << "Building interpolation trajectory from state index " << start_idx 
                 << " to " << (start_idx + num_states - 1) << " (" << num_states << " states)." << std::endl;
-        std::cout << "[MAP DEBUG] Trajectory covers time range (inclusive): " << std::fixed << std::setprecision(12) 
+        std::cout << "[MAP DEBUG | Frame " << index_frame << "] " << "Trajectory covers time range (inclusive): " << std::fixed << std::setprecision(12) 
                 << begin_slam_time.seconds() << " - " << end_slam_time.seconds() 
                 << ", with num states: " << num_states << std::endl;
 #endif
@@ -1412,7 +1410,7 @@ namespace  stateestimate{
         }
         std::vector<double> unique_point_times(unique_point_times_set.begin(), unique_point_times_set.end());
 #ifdef DEBUG
-        std::cout << "[MAP DEBUG] Found " << unique_point_times.size() << " unique timestamps in the point cloud." << std::endl;
+        std::cout << "[MAP DEBUG | Frame " << index_frame << "] " << "Found " << unique_point_times.size() << " unique timestamps in the point cloud." << std::endl;
 #endif
         // Cache interpolated poses
         const Eigen::Matrix4d Ts2b = options_.Tb2s.inverse(); // transformation of sensor relative to robot
@@ -1452,12 +1450,12 @@ namespace  stateestimate{
         for(const auto& pair : Ts2m_cache_map) {
             if (!pair.second.allFinite()) {
                 poses_are_finite = false;
-                std::cout << "[MAP DEBUG] CRITICAL: Cached pose for timestamp " << pair.first << " is NOT finite!" << std::endl;
+                std::cout << "[MAP DEBUG | Frame " << index_frame << "] " << "CRITICAL: Cached pose for timestamp " << pair.first << " is NOT finite!" << std::endl;
                 break;
             }
         }
         if (poses_are_finite) {
-            std::cout << "[MAP DEBUG] All " << Ts2m_cache_map.size() << " cached poses are finite." << std::endl;
+            std::cout << "[MAP DEBUG | Frame " << index_frame << "] " << "All " << Ts2m_cache_map.size() << " cached poses are finite." << std::endl;
         }
 #endif
 
@@ -1492,7 +1490,7 @@ namespace  stateestimate{
         // [DEBUG] Verify that transformed points are valid
         for(const auto& point : frame) {
             if(!point.pt.allFinite()) {
-                std::cout << "[MAP DEBUG] CRITICAL: Transformed point `pt` is NOT finite!" << std::endl;
+                std::cout << "[MAP DEBUG | Frame " << index_frame << "] " << "CRITICAL: Transformed point `pt` is NOT finite!" << std::endl;
                 break;
             }
         }
@@ -1502,7 +1500,7 @@ namespace  stateestimate{
         map_.add(frame, kSizeVoxelMap, kMaxNumPointsInVoxel, kMinDistancePoints);
 
 #ifdef DEBUG
-        std::cout << "[MAP DEBUG] Map size after adding new points " << map_.size() << " points." << std::endl;
+        std::cout << "[MAP DEBUG | Frame " << index_frame << "] " << "Map size after adding new points " << map_.size() << " points." << std::endl;
 #endif
 
         if (options_.filter_lifetimes) {
@@ -1519,8 +1517,8 @@ namespace  stateestimate{
         map_.remove(location, kMaxDistance);
 
 #ifdef DEBUG
-        std::cout << "[MAP DEBUG] Removing points farther than " << kMaxDistance << "m from " << location.transpose() << std::endl;
-        std::cout << "[MAP DEBUG] Map size after outlier point removal " << map_.size() << " points." << std::endl;
+        std::cout << "[MAP DEBUG | Frame " << index_frame << "] " << "Removing points farther than " << kMaxDistance << "m from " << location.transpose() << std::endl;
+        std::cout << "[MAP DEBUG | Frame " << index_frame << "] " << "Map size after outlier point removal " << map_.size() << " points." << std::endl;
 #endif
 
     }
@@ -1639,7 +1637,7 @@ namespace  stateestimate{
 #ifdef DEBUG
     // [DEBUG] Initial check at the start of the function
     std::cout << "[ICP DEBUG | Frame " << index_frame << "]" << std::endl;
-    std::cout << "[ICP DEBUG] Starting with " << keypoints.size() << " keypoints." <<  ", "<< imu_data_vec.size() << " IMU datas." <<  ", "<< pose_data_vec.size() << " pose datas." << std::endl;
+    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Starting with " << keypoints.size() << " keypoints." <<  ", "<< imu_data_vec.size() << " IMU datas." <<  ", "<< pose_data_vec.size() << " pose datas." << std::endl;
 #endif
 
         // Step 1: Declare success flag for ICP
@@ -1716,9 +1714,9 @@ namespace  stateestimate{
 
 #ifdef DEBUG
     // [DEBUG] Check if the state from the previous frame is valid
-    if (!prev_Tm2b.matrix().allFinite()) { std::cout << "[ICP DEBUG] CRITICAL: prev_Tm2b is NOT finite!" << std::endl; }
-    if (!prev_wb2m_inr.allFinite()) { std::cout << "[ICP DEBUG] CRITICAL: prev_wb2m_inr is NOT finite!" << std::endl; }
-    if (!prev_dwb2m_inr.allFinite()) { std::cout << "[ICP DEBUG] CRITICAL: prev_dwb2m_inr is NOT finite!" << std::endl; }
+    if (!prev_Tm2b.matrix().allFinite()) { std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "CRITICAL: prev_Tm2b is NOT finite!" << std::endl; }
+    if (!prev_wb2m_inr.allFinite()) { std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "CRITICAL: prev_wb2m_inr is NOT finite!" << std::endl; }
+    if (!prev_dwb2m_inr.allFinite()) { std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "CRITICAL: prev_dwb2m_inr is NOT finite!" << std::endl; }
 #endif
 
         // Step 11: Validate previous state values
@@ -1744,10 +1742,10 @@ namespace  stateestimate{
         // This anchors the trajectory at the previous frame’s end state
         SLAM_TRAJ->add(prev_slam_time, prev_Tm2b_var, prev_wb2m_inr_var, prev_dwb2m_inr_var);
 #ifdef DEBUG
-        std::cout << "[ICP DEBUG] SLAM_TRAJ: add prev_slam_time." << std::endl; 
-        std::cout << "[ICP DEBUG] SLAM_TRAJ: add prev_Tm2b_var."  << std::endl;
-        std::cout << "[ICP DEBUG] SLAM_TRAJ: add prev_wb2m_inr_var." << std::endl;
-        std::cout << "[ICP DEBUG] SLAM_TRAJ: add prev_dwb2m_inr_var." << std::endl;
+        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_TRAJ: add prev_slam_time." << std::endl; 
+        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_TRAJ: add prev_Tm2b_var."  << std::endl;
+        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_TRAJ: add prev_wb2m_inr_var." << std::endl;
+        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_TRAJ: add prev_dwb2m_inr_var." << std::endl;
 #endif
 
         // Step 15: Add previous state variables to optimization list
@@ -1757,9 +1755,9 @@ namespace  stateestimate{
         SLAM_STATE_VAR.emplace_back(prev_dwb2m_inr_var); // Add acceleration
 
 #ifdef DEBUG
-    std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace prev_Tm2b_var." << std::endl; 
-    std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace prev_wb2m_inr_var." << std::endl;
-    std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace prev_dwb2m_inr_var." << std::endl;
+    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_STATE_VAR: emplace prev_Tm2b_var." << std::endl; 
+    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_STATE_VAR: emplace prev_wb2m_inr_var." << std::endl;
+    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_STATE_VAR: emplace prev_dwb2m_inr_var." << std::endl;
 #endif
 
         // Step 16: Handle IMU-related state variables (if IMU is enabled)
@@ -1767,7 +1765,7 @@ namespace  stateestimate{
             // Add IMU biases to optimization (biases evolve over time)
             SLAM_STATE_VAR.emplace_back(prev_imu_biases_var);
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace prev_imu_biases_var." << std::endl; 
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_STATE_VAR: emplace prev_imu_biases_var." << std::endl; 
 #endif
 
             // Decide how to handle Ti2m (IMU-to-map transformation)
@@ -1784,7 +1782,7 @@ namespace  stateestimate{
                     // Ti2m_init_only=true means optimize Ti2m only at index_frame=1
                     SLAM_STATE_VAR.emplace_back(prev_Ti2m_var); // Add for optimization
 #ifdef DEBUG
-                    std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace prev_Ti2m_var." << std::endl; 
+                    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_STATE_VAR: emplace prev_Ti2m_var." << std::endl; 
 #endif
                 }
                 // If Ti2m_init_only=true and index_frame>1, Ti2m stays as is (not optimized)
@@ -1799,13 +1797,13 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         std::cout << std::fixed << std::setprecision(12) 
-        << "[ICP DEBUG] LOGGING: PREV_TIME: " << PREV_TIME << ", CURR_TIME: " << CURR_TIME << std::endl;
+        << "[ICP DEBUG | Frame " << index_frame << "] " << "LOGGING: PREV_TIME: " << PREV_TIME << ", CURR_TIME: " << CURR_TIME << std::endl;
 #endif
 
         // [DEBUG] THIS IS THE MOST LIKELY CULPRIT
         if (CURR_TIME <= PREV_TIME) {
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] CRITICAL: Zero or negative time difference between frames!" << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "CRITICAL: Zero or negative time difference between frames!" << std::endl;
 #endif
             return false;
         }
@@ -1815,7 +1813,7 @@ namespace  stateestimate{
         // +1 includes the mandatory end state at curr_time
         const int NUM_STATES = options_.num_extra_states + 1;
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] Adding "<< NUM_STATES << " extra number of state between 2 original state." << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Adding "<< NUM_STATES << " extra number of state between 2 original state." << std::endl;
 #endif
 
         // Step 19: Create timestamps (knot times) for new states
@@ -1824,9 +1822,9 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [DEBUG] Check the calculated time difference
-        std::cout << std::fixed << std::setprecision(12) << "[ICP DEBUG] Time difference : " << TIME_DIFF << "s" << std::endl;
+        std::cout << std::fixed << std::setprecision(12) << "[ICP DEBUG | Frame " << index_frame << "] " << "Time difference : " << TIME_DIFF << "s" << std::endl;
         if (!std::isfinite(TIME_DIFF) || TIME_DIFF <= 0) {
-            std::cout << "[ICP DEBUG] CRITICAL: Invalid TIME_DIFF!" << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "CRITICAL: Invalid TIME_DIFF!" << std::endl;
         }
 #endif
 
@@ -1859,7 +1857,7 @@ namespace  stateestimate{
 #ifdef DEBUG
         // [DEBUG] Check the initial pose prediction for NaNs
         if (!T_NEXT_MAT.allFinite()) {
-            std::cout << "[ICP DEBUG] CRITICAL: Extrapolated pose T_NEXT_MAT is NOT finite!" << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "CRITICAL: Extrapolated pose T_NEXT_MAT is NOT finite!" << std::endl;
         }
 #endif
 
@@ -1891,10 +1889,10 @@ namespace  stateestimate{
             // Add state to trajectory
             SLAM_TRAJ->add(knot_slam_time, Tm2b_var, wb2m_inr_var, dwb2m_inr_var);
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] SLAM_TRAJ: add knot_slam_time." << std::endl; 
-            std::cout << "[ICP DEBUG] SLAM_TRAJ: add Tm2b_var." << std::endl;
-            std::cout << "[ICP DEBUG] SLAM_TRAJ: add wb2m_inr_var." << std::endl;
-            std::cout << "[ICP DEBUG] SLAM_TRAJ: add dwb2m_inr_var." << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_TRAJ: add knot_slam_time." << std::endl; 
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_TRAJ: add Tm2b_var." << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_TRAJ: add wb2m_inr_var." << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_TRAJ: add dwb2m_inr_var." << std::endl;
 #endif
 
             // Add state variables to optimization list
@@ -1902,14 +1900,14 @@ namespace  stateestimate{
             SLAM_STATE_VAR.emplace_back(wb2m_inr_var); // Add velocity
             SLAM_STATE_VAR.emplace_back(dwb2m_inr_var); // Add acceleration
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace Tm2b_var." << std::endl; 
-            std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace wb2m_inr_var." << std::endl; 
-            std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace dwb2m_inr_var." << std::endl; 
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_STATE_VAR: emplace Tm2b_var." << std::endl; 
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_STATE_VAR: emplace wb2m_inr_var." << std::endl; 
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_STATE_VAR: emplace dwb2m_inr_var." << std::endl; 
 #endif
             if (options_.use_imu) {
                 SLAM_STATE_VAR.emplace_back(imu_biases_var); // Add IMU biases
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace imu_biases_var." << std::endl; 
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_STATE_VAR: emplace imu_biases_var." << std::endl; 
 #endif
             }
 
@@ -1925,7 +1923,7 @@ namespace  stateestimate{
                     } else {
                         SLAM_STATE_VAR.emplace_back(Ti2m_var); // Optimize Ti2m
 #ifdef DEBUG
-                        std::cout << "[ICP DEBUG] SLAM_STATE_VAR: emplace Ti2m_var." << std::endl; 
+                        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_STATE_VAR: emplace Ti2m_var." << std::endl; 
 #endif
                     }
                 }
@@ -1963,9 +1961,9 @@ namespace  stateestimate{
             SLAM_TRAJ->addAccelerationPrior(PREV_VAR.time, dwb2m_inr, P0_accel); // Constrain initial acceleration
             
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] SLAM_TRAJ: addPosePrior." << std::endl;
-            std::cout << "[ICP DEBUG] SLAM_TRAJ: addVelocityPrior." << std::endl; 
-            std::cout << "[ICP DEBUG] SLAM_TRAJ: addAccelerationPrior."  << std::endl; 
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_TRAJ: addPosePrior." << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_TRAJ: addVelocityPrior." << std::endl; 
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_TRAJ: addAccelerationPrior."  << std::endl; 
 #endif
 
             if (PREV_VAR.time != Time(trajectory_.at(0).end_timestamp)) throw std::runtime_error{"inconsistent timestamp"};
@@ -1993,12 +1991,12 @@ namespace  stateestimate{
                 const auto bias_prior_factor = finalicp::WeightedLeastSqCostTerm<6>::MakeShared(bias_error, noise_model, loss_func);
                 imu_prior_cost_terms.emplace_back(bias_prior_factor);
 #ifdef DEBUG
-                    std::cout << "[ICP DEBUG] imu_prior_cost_terms: Emplace bias_prior_factor." << std::endl;
+                    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "imu_prior_cost_terms: Emplace bias_prior_factor." << std::endl;
 #endif
 
             } else if (options_.use_bias_prior_after_init) {  // For subsequent frames, add IMU bias prior if enabled
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] Apply a prior on the IMU bias for subsequent frame " << index_frame << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Apply a prior on the IMU bias for subsequent frame " << index_frame << std::endl;
 #endif
                 // controls whether to apply a prior on the IMU bias for all frames after the first one.
                 // Get the previous frame’s state variables
@@ -2019,7 +2017,7 @@ namespace  stateestimate{
                 const auto bias_prior_factor = finalicp::WeightedLeastSqCostTerm<6>::MakeShared(bias_error, noise_model, loss_func);
                 imu_prior_cost_terms.emplace_back(bias_prior_factor);
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] imu_prior_cost_terms: Emplace bias_prior_factor." << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "imu_prior_cost_terms: Emplace bias_prior_factor." << std::endl;
 #endif
             }
 
@@ -2043,7 +2041,7 @@ namespace  stateestimate{
                 const auto Ti2m_prior_factor = finalicp::WeightedLeastSqCostTerm<6>::MakeShared(Ti2m_error, noise_model, loss_func);
                 Ti2m_prior_cost_terms.emplace_back(Ti2m_prior_factor);
 #ifdef DEBUG
-                    std::cout << "[ICP DEBUG] Ti2m_prior_cost_terms: Emplace Ti2m_prior_factor." << std::endl;
+                    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Ti2m_prior_cost_terms: Emplace Ti2m_prior_factor." << std::endl;
 #endif
             }
             // For subsequent frames, add Ti2m prior if enabled and not using ground truth
@@ -2065,7 +2063,7 @@ namespace  stateestimate{
                 const auto Ti2m_prior_factor = finalicp::WeightedLeastSqCostTerm<6>::MakeShared(Ti2m_error, noise_model, loss_func);
                 Ti2m_prior_cost_terms.emplace_back(Ti2m_prior_factor);
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] Ti2m_prior_cost_terms: Emplace Ti2m_prior_factor." << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Ti2m_prior_cost_terms: Emplace Ti2m_prior_factor." << std::endl;
 #endif
             }
         }
@@ -2087,13 +2085,13 @@ namespace  stateestimate{
             // Timer[5] measures the time taken to update the sliding window filter
 #ifdef DEBUG
             if (!timer.empty()) timer[5].second->start();
-            std::cout << "[ICP DEBUG] Update sliding window variables." << index_frame << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Update sliding window variables." << index_frame << std::endl;
 #endif
 
             // For the initial frame, include the previous frame’s state variables
             if (index_frame == 1) {
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] Apply a prior state variable on initial frame." << index_frame << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Apply a prior state variable on initial frame." << index_frame << std::endl;
 #endif
                 // Get the previous frame’s state variables
                 const auto& PREV_VAR = trajectory_vars_.at(prev_trajectory_var_index);
@@ -2104,12 +2102,12 @@ namespace  stateestimate{
                 // If IMU is enabled, add IMU biases and optionally Ti2m
                 if (options_.use_imu) {
 #ifdef DEBUG
-                    std::cout << "[ICP DEBUG] Apply an IMU bias variable on initial frame " << index_frame << std::endl;
+                    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Apply an IMU bias variable on initial frame " << index_frame << std::endl;
 #endif
                     sliding_window_filter_->addStateVariable(std::vector<finalicp::StateVarBase::Ptr>{PREV_VAR.imu_biases});
                     if (!use_Ti2m_gt) {
 #ifdef DEBUG
-                        std::cout << "[ICP DEBUG] Apply a prior Ti2m variable for initial frame " << index_frame << "as we are not using Ti2m_gt" << std::endl;
+                        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Apply a prior Ti2m variable for initial frame " << index_frame << "as we are not using Ti2m_gt" << std::endl;
 #endif
                         sliding_window_filter_->addStateVariable(std::vector<finalicp::StateVarBase::Ptr>{PREV_VAR.Ti2m});
                     }
@@ -2138,7 +2136,7 @@ namespace  stateestimate{
         // Remove states older than delay_adding_points frames ago
         if (index_frame > options_.delay_adding_points && options_.delay_adding_points >= 0) {
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] Condition (index_frame > delay_adding_points) met. Entering marginalization." << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Condition (index_frame > delay_adding_points) met. Entering marginalization." << std::endl;
 #endif
             // Collect state variables to marginalize (from to_marginalize_ up to marg_time)
             std::vector<finalicp::StateVarBase::Ptr> marg_vars;
@@ -2158,7 +2156,7 @@ namespace  stateestimate{
 #ifdef DEBUG
                         // Check if the variables are valid *before* marginalizing them
                         if(!VAR.Tm2b->value().matrix().allFinite()) {
-                           std::cout << "[ICP DEBUG] CRITICAL: VAR.Tm2b at index " << i << " is NaN before marginalization!" << std::endl;
+                           std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "CRITICAL: VAR.Tm2b at index " << i << " is NaN before marginalization!" << std::endl;
                         }
 #endif
                     // Add state variables to marginalize
@@ -2181,15 +2179,15 @@ namespace  stateestimate{
             // Marginalize the collected variables if any
             if (!marg_vars.empty()) {
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] Collected " << num_states << " states to marginalize." << std::endl;
-                std::cout << "[ICP DEBUG] Calling sliding_window_filter_->marginalizeVariable()" << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Collected " << num_states << " states to marginalize." << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Calling sliding_window_filter_->marginalizeVariable()" << std::endl;
 #endif
 
                 sliding_window_filter_->marginalizeVariable(marg_vars);
 #ifdef DEBUG
                 std::cout << std::fixed << std::setprecision(12) 
-                << "[ICP DEBUG] Marginalizing time: " << begin_marg_time - end_marg_time << ", with num states: " << num_states << std::endl;
-                std::cout << "[ICP DEBUG] Finished marginalization call." << std::endl;
+                << "[ICP DEBUG | Frame " << index_frame << "] " << "Marginalizing time: " << begin_marg_time - end_marg_time << ", with num states: " << num_states << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Finished marginalization call." << std::endl;
 #endif
             }
             // Step 30: Stop the marginalization timer
@@ -2211,7 +2209,7 @@ namespace  stateestimate{
         }
         std::vector<double> unique_point_times(unique_point_times_set.begin(), unique_point_times_set.end());
 #ifdef DEBUG
-        std::cout << "[ICP DEBUG] Found " << unique_point_times.size() << " unique timestamps in the point cloud." << std::endl;
+        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Found " << unique_point_times.size() << " unique timestamps in the point cloud." << std::endl;
 #endif
         // Configure IMU cost term options
         auto imu_options = finalicp::IMUSuperCostTerm::Options();
@@ -2266,7 +2264,7 @@ namespace  stateestimate{
                 }
 
 #ifdef DEBUG
-                    std::cout << "[ICP DEBUG] IMU Data: " << std::setprecision(4) << imu_data.timestamp << " " << imu_data.ang_vel.transpose() << " " << imu_data.lin_acc.transpose() << std::endl;
+                    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "IMU Data: " << std::setprecision(4) << imu_data.timestamp << " " << imu_data.ang_vel.transpose() << " " << imu_data.lin_acc.transpose() << std::endl;
 #endif
 
                 // Interpolate IMU biases between knots
@@ -2308,7 +2306,7 @@ namespace  stateestimate{
                     const auto acc_cost = finalicp::WeightedLeastSqCostTerm<3>::MakeShared(acc_error_func, acc_noise_model, acc_loss_func);
                     imu_cost_terms.emplace_back(acc_cost);
 #ifdef DEBUG
-                    std::cout << "[ICP DEBUG] imu_cost_terms: Emplace acc_cost." << std::endl;
+                    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "imu_cost_terms: Emplace acc_cost." << std::endl;
 #endif
                 }
 
@@ -2316,7 +2314,7 @@ namespace  stateestimate{
                 const auto gyro_cost = finalicp::WeightedLeastSqCostTerm<3>::MakeShared(gyro_error_func, gyro_noise_model, gyro_loss_func);
                 imu_cost_terms.emplace_back(gyro_cost);
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] imu_cost_terms: Emplace gyro_cost." << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "imu_cost_terms: Emplace gyro_cost." << std::endl;
 #endif
             }
 
@@ -2344,7 +2342,7 @@ namespace  stateestimate{
                 const auto bias_prior_factor = finalicp::WeightedLeastSqCostTerm<6>::MakeShared(bias_error, noise_model, loss_func);
                 imu_prior_cost_terms.emplace_back(bias_prior_factor);
 #ifdef DEBUG
-                    std::cout << "[ICP DEBUG] imu_prior_cost_terms: Emplace bias_prior_factor." << std::endl;
+                    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "imu_prior_cost_terms: Emplace bias_prior_factor." << std::endl;
 #endif
             }
             
@@ -2353,7 +2351,7 @@ namespace  stateestimate{
             // Get Ti2m prior cost terms
             if (!options_.Ti2m_init_only && !use_Ti2m_gt) {
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] Apply a prior cost term for Ti2m term for initial frame " << index_frame << "as we are not using ground truth and not init only." << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Apply a prior cost term for Ti2m term for initial frame " << index_frame << "as we are not using ground truth and not init only." << std::endl;
 #endif 
                 // Define identity Ti2m as the prior guess (no relative change)
                 const auto Ti2m = math::se3::Transformation();
@@ -2376,7 +2374,7 @@ namespace  stateestimate{
                     const auto Ti2m_prior_factor = finalicp::WeightedLeastSqCostTerm<6>::MakeShared(Ti2m_error, noise_model, loss_func);
                     Ti2m_prior_cost_terms.emplace_back(Ti2m_prior_factor);
 #ifdef DEBUG
-                    std::cout << "[ICP DEBUG] Ti2m_prior_cost_terms: Emplace Ti2m_prior_factor." << std::endl;
+                    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Ti2m_prior_cost_terms: Emplace Ti2m_prior_factor." << std::endl;
 #endif
                 }
             }
@@ -2670,14 +2668,14 @@ namespace  stateestimate{
         for (int iter = 0; iter < options_.num_iters_icp; iter++) {
 #ifdef DEBUG
             // [DEBUG] Start of an ICP iteration
-            std::cout << "[ICP DEBUG] --- Iteration " << iter << " ---" << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "--- Iteration " << iter << " ---" << std::endl;
 #endif
             // Initialize optimization problem based on swf_inside_icp
             const auto problem = [&]() -> finalicp::Problem::Ptr {
                 if (swf_inside_icp) {
 #ifdef DEBUG
-                    std::cout << "[ICP DEBUG] swf_inside_icp is true." << std::endl; 
-                    std::cout << "[ICP DEBUG] problem: use SlidingWindowFilter." << std::endl; 
+                    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "swf_inside_icp is true." << std::endl; 
+                    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "problem: use SlidingWindowFilter." << std::endl; 
 #endif
                     // Use SlidingWindowFilter for sliding window optimization
                     return std::make_shared<finalicp::SlidingWindowFilter>(*sliding_window_filter_);
@@ -2687,7 +2685,7 @@ namespace  stateestimate{
                     for (const auto& var : SLAM_STATE_VAR) {
                         problem->addStateVariable(var);
 #ifdef DEBUG
-                        std::cout << "[ICP DEBUG] problem: use OptimizationProblem addStateVariable: " << var << std::endl; 
+                        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "problem: use OptimizationProblem addStateVariable: " << var << std::endl; 
 #endif
                     }
                     return problem;
@@ -2697,12 +2695,12 @@ namespace  stateestimate{
             // Add prior cost terms to the problem
             SLAM_TRAJ->addPriorCostTerms(*problem);
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] SLAM_TRAJ: addPriorCostTerms problem: " << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_TRAJ: addPriorCostTerms problem: " << std::endl;
 #endif
             for (const auto& prior_cost_term : prior_cost_terms) {
                 problem->addCostTerm(prior_cost_term);
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] problem: addCostTerm prior_cost_term: " << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "problem: addCostTerm prior_cost_term: " << std::endl;
 #endif
             }
 
@@ -2721,17 +2719,17 @@ namespace  stateestimate{
 
 #ifdef DEBUG
             // [DEBUG] Check if keypoint coordinates are finite before association
-            std::cout << "[ICP DEBUG] Keypoint size for association: " << keypoints.size() << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Keypoint size for association: " << keypoints.size() << std::endl;
             bool keypoints_are_finite = true;
             for (size_t i = 0; i < keypoints.size(); ++i) {
                 if (!keypoints[i].pt.allFinite()) {
-                    std::cout << "[ICP DEBUG] CRITICAL: Keypoint " << i << " coordinate is NOT finite before association!" << std::endl;
+                    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "CRITICAL: Keypoint " << i << " coordinate is NOT finite before association!" << std::endl;
                     keypoints_are_finite = false;
                     break;
                 }
             }
             if (keypoints_are_finite) {
-                std::cout << "[ICP DEBUG] All keypoint coordinates are finite before association." << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "All keypoint coordinates are finite before association." << std::endl;
             }
 #endif
         ///################################################################################
@@ -2759,13 +2757,13 @@ namespace  stateestimate{
 
 #ifdef DEBUG
                     if (i == 0) {
-                        std::cout << "[ICP DEBUG] Association for point 0:" << std::endl;
-                        std::cout << "[ICP DEBUG] Point coordinate: " << pt_keypoint.transpose() << std::endl;
-                        std::cout << "[ICP DEBUG] Neighbors found: " << vector_neighbors.size() << std::endl;
-                        std::cout << "[ICP DEBUG] Neighborhood a2D: " << neighborhood.a2D << std::endl;
-                        std::cout << "[ICP DEBUG] Dist to plane: " << dist_to_plane << std::endl;
+                        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Association for point 0:" << std::endl;
+                        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Point coordinate: " << pt_keypoint.transpose() << std::endl;
+                        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Neighbors found: " << vector_neighbors.size() << std::endl;
+                        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Neighborhood a2D: " << neighborhood.a2D << std::endl;
+                        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Dist to plane: " << dist_to_plane << std::endl;
                         if (!std::isfinite(neighborhood.a2D) || !std::isfinite(dist_to_plane)) {
-                            std::cout << "[ICP DEBUG] CRITICAL: NaN detected in neighborhood/distance calculation!" << std::endl;
+                            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "CRITICAL: NaN detected in neighborhood/distance calculation!" << std::endl;
                         }
                     }
 #endif
@@ -2893,46 +2891,46 @@ namespace  stateestimate{
 
 #ifdef DEBUG
             // [ADDED DEBUG] Print the number of matches found before checking
-            std::cout << "[ICP DEBUG] Found " << N_matches << " point-to-plane matches." << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Found " << N_matches << " point-to-plane matches." << std::endl;
 #endif
             p2p_super_cost_term->initP2PMatches(); // Initialize point-to-plane matches
 // #ifdef DEBUG
-//                 std::cout << "[ICP DEBUG] problem: add meas_cost_terms total: " << meas_cost_terms.size() << std::endl;
+//                 std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "problem: add meas_cost_terms total: " << meas_cost_terms.size() << std::endl;
 // #endif
 //             for (const auto& cost : meas_cost_terms) {
 //                 problem->addCostTerm(cost); // Add point-to-plane cost terms | this is only if not using p2psupercostterm
 //             }
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] problem: add imu_cost_terms total: " << imu_cost_terms.size() << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "problem: add imu_cost_terms total: " << imu_cost_terms.size() << std::endl;
 #endif
             for (const auto& cost : imu_cost_terms) {
                 problem->addCostTerm(cost); // Add IMU cost terms
             }
 // #ifdef DEBUG
-//                 std::cout << "[ICP DEBUG] problem: add pose_meas_cost_terms total: " << pose_meas_cost_terms.size() << std::endl;
+//                 std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "problem: add pose_meas_cost_terms total: " << pose_meas_cost_terms.size() << std::endl;
 // #endif
 //             for (const auto& cost : pose_meas_cost_terms) {
 //                 problem->addCostTerm(cost); // Add pose measurement cost terms
 //             }
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] problem: add imu_prior_cost_terms total: " << imu_prior_cost_terms.size() << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "problem: add imu_prior_cost_terms total: " << imu_prior_cost_terms.size() << std::endl;
 #endif
             for (const auto& cost : imu_prior_cost_terms) {
                 problem->addCostTerm(cost); // Add IMU bias prior cost terms
             }
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] problem: add Ti2m_prior_cost_terms total: " << Ti2m_prior_cost_terms.size() << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "problem: add Ti2m_prior_cost_terms total: " << Ti2m_prior_cost_terms.size() << std::endl;
 #endif
             for (const auto& cost : Ti2m_prior_cost_terms) {
                 problem->addCostTerm(cost); // Add Ti2m prior cost terms
             }
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] problem: add p2p_super_cost_term." << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "problem: add p2p_super_cost_term." << std::endl;
 #endif
             problem->addCostTerm(p2p_super_cost_term); // Add point-to-plane super cost term
             // if (options_.use_imu) {
 // #ifdef DEBUG
-//                 std::cout << "[ICP DEBUG] problem: add imu_super_cost_term total." << std::endl;
+//                 std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "problem: add imu_super_cost_term total." << std::endl;
 // #endif
             //     problem->addCostTerm(imu_super_cost_term); // Add IMU super cost term
             // }
@@ -2945,10 +2943,10 @@ namespace  stateestimate{
             // Ensures enough matches for reliable optimization
             if (N_matches < options_.min_number_keypoints) {
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] CRITICAL: not enough keypoints selected in icp !" << std::endl;
-                std::cout << "[ICP DEBUG] Found: " << N_matches << " point-to-plane matches (residuals)." << std::endl;
-                std::cout << "[ICP DEBUG] Minimum required: " << options_.min_number_keypoints << std::endl;
-                std::cout << "[ICP DEBUG] Map size: " << map_.size() << " points." << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "CRITICAL: not enough keypoints selected in icp !" << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Found: " << N_matches << " point-to-plane matches (residuals)." << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Minimum required: " << options_.min_number_keypoints << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Map size: " << map_.size() << " points." << std::endl;
 #endif
                 icp_success = false;
                 break; // Exit the ICP loop if insufficient keypoints
@@ -2958,7 +2956,7 @@ namespace  stateestimate{
             // Uses Gauss-Newton solver to refine the trajectory
 #ifdef DEBUG
             timer[2].second->start(); // Start optimization timer
-            std::cout << "[ICP DEBUG] Calling solver.optimize()... Number of variables: " << problem->getStateVector()->getNumberOfStates() << ", Number of cost terms: " << problem->getNumberOfCostTerms() << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Calling solver.optimize()... Number of variables: " << problem->getStateVector()->getNumberOfStates() << ", Number of cost terms: " << problem->getNumberOfCostTerms() << std::endl;
 #endif
             
             finalicp::GaussNewtonSolverNVA::Params params;
@@ -2973,14 +2971,14 @@ namespace  stateestimate{
                 solver.optimize();
             } catch (const finalicp::decomp_failure& e) {
 #ifdef DEBUG
-                std::cerr << "[ICP DEBUG] CATASTROPHIC SOLVER FAILURE: " << e.what() << std::endl;
-                std::cerr << "[ICP DEBUG] This usually means the Hessian matrix is not positive-definite, likely due to an ill-conditioned problem (e.g., bad geometry, insufficient constraints/priors)." << std::endl;
+                std::cerr << "[ICP DEBUG | Frame " << index_frame << "] " << "CATASTROPHIC SOLVER FAILURE: " << e.what() << std::endl;
+                std::cerr << "[ICP DEBUG | Frame " << index_frame << "] " << "This usually means the Hessian matrix is not positive-definite, likely due to an ill-conditioned problem (e.g., bad geometry, insufficient constraints/priors)." << std::endl;
 #endif
                 icp_success = false;
                 break;
             } catch (const std::exception& e) {
 #ifdef DEBUG
-                std::cerr << "[ICP DEBUG] AN UNEXPECTED EXCEPTION OCCURRED DURING SOLVER::OPTIMIZE: " << e.what() << std::endl;
+                std::cerr << "[ICP DEBUG | Frame " << index_frame << "] " << "AN UNEXPECTED EXCEPTION OCCURRED DURING SOLVER::OPTIMIZE: " << e.what() << std::endl;
 #endif
                 icp_success = false;
                 break;
@@ -2988,19 +2986,19 @@ namespace  stateestimate{
 
 #ifdef DEBUG
             timer[2].second->stop(); // Stop optimization timer
-            std::cout << "[ICP DEBUG] Solver finished." << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Solver finished." << std::endl;
 #endif
 
             // Step 48: Update the trajectory estimate and check convergence
             // Computes differences in pose, velocity, and acceleration to determine if converged
 #ifdef DEBUG
             timer[3].second->start(); // Start alignment timer
-            std::cout << "[ICP DEBUG] Updating State & Checking Convergence" << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Updating State & Checking Convergence" << std::endl;
 #endif
 
 #ifdef DEBUG
             // [ADDED DEBUG] Header for this block to show the current iteration
-            std::cout << "[ICP DEBUG] Updating State & Checking Convergence (Iteration " << iter << ")" << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Updating State & Checking Convergence (Iteration " << iter << ")" << std::endl;
 #endif
 
             double diff_trans = 0.0, diff_rot = 0.0, diff_vel = 0.0, diff_acc = 0.0;
@@ -3014,7 +3012,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
             // [ADDED DEBUG] Print the change in the beginning pose translation
-            std::cout << "[ICP DEBUG] Begin Translation | Old: " << current_estimate.begin_t.transpose()
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Begin Translation | Old: " << current_estimate.begin_t.transpose()
                     << " | New: " << begin_Ts2m.block<3, 1>(0, 3).transpose() << std::endl;
 #endif
 
@@ -3027,7 +3025,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
             // [ADDED DEBUG] Print the change in the ending pose translation
-            std::cout << "[ICP DEBUG] End Translation   | Old: " << current_estimate.end_t.transpose()
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "End Translation   | Old: " << current_estimate.end_t.transpose()
                     << " | New: " << end_Ts2m.block<3, 1>(0, 3).transpose() << std::endl;
 #endif
 
@@ -3077,10 +3075,10 @@ namespace  stateestimate{
             // --- [ADD DEBUG CHECKS AFTER CALCULATING DIFFS] ---
 #ifdef DEBUG
             if (!std::isfinite(diff_rot) || !std::isfinite(diff_trans) || !std::isfinite(diff_vel) || !std::isfinite(diff_acc)) {
-                std::cout << "[ICP DEBUG] CRITICAL: Non-finite difference detected after optimization! The state is likely corrupted with NaNs." << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "CRITICAL: Non-finite difference detected after optimization! The state is likely corrupted with NaNs." << std::endl;
             }
-            std::cout << "[ICP DEBUG] State Change   | d_rot: " << diff_rot << ", d_trans: " << diff_trans << ", d_vel: " << diff_vel << ", d_acc: " << diff_acc << std::endl;
-            std::cout << "[ICP DEBUG] End Pose (t)   | " << current_estimate.end_t.transpose() << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "State Change   | d_rot: " << diff_rot << ", d_trans: " << diff_trans << ", d_vel: " << diff_vel << ", d_acc: " << diff_acc << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "End Pose (t)   | " << current_estimate.end_t.transpose() << std::endl;
 #endif
 
             // Check convergence
@@ -3090,7 +3088,7 @@ namespace  stateestimate{
                 diff_vel < options_.threshold_translation_norm * 10.0 + options_.threshold_orientation_norm * 10.0 &&
                 diff_acc < options_.threshold_translation_norm * 100.0 + options_.threshold_orientation_norm * 100.0)){
 #ifdef DEBUG
-                std::cout << "[ICP DEBUG] Finished with N=" << iter << " ICP iterations" << std::endl;
+                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Finished with N=" << iter << " ICP iterations" << std::endl;
 #endif
                 if (options_.break_icp_early) {
                     break; // Exit loop if converged and early breaking is enabled
@@ -3100,7 +3098,7 @@ namespace  stateestimate{
             // Re-transform keypoints for the next iteration
 #ifdef DEBUG
             timer[0].second->start(); // Start update transform timer
-            std::cout << "[ICP DEBUG] Performing initial keypoint transformation after ICP loop." << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Performing initial keypoint transformation after ICP loop." << std::endl;
 #endif
             transform_keypoints(); // Updates keypoints.pt using the latest trajectory
 #ifdef DEBUG
@@ -3115,56 +3113,56 @@ namespace  stateestimate{
         // Includes state priors, point-to-plane, IMU, pose, and Ti2m cost terms
         SLAM_TRAJ->addPriorCostTerms(*sliding_window_filter_); // Add state priors (e.g., for initial state x_0)
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] SLAM_TRAJ: addPriorCostTerms with sliding_window_filter_" << std::endl;
-            std::cout << "[ICP DEBUG] sliding_window_filter_: add prior_cost_terms total: " << prior_cost_terms.size() << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_TRAJ: addPriorCostTerms with sliding_window_filter_" << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "sliding_window_filter_: add prior_cost_terms total: " << prior_cost_terms.size() << std::endl;
 #endif
         for (const auto& prior_cost_term : prior_cost_terms) {
             sliding_window_filter_->addCostTerm(prior_cost_term); // Add prior cost terms | not really adding much
         }
 // #ifdef DEBUG
-//             std::cout << "[ICP DEBUG] sliding_window_filter_: add meas_cost_terms total: " << meas_cost_terms.size() << std::endl;
+//             std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "sliding_window_filter_: add meas_cost_terms total: " << meas_cost_terms.size() << std::endl;
 // #endif
 //         for (const auto& meas_cost_term : meas_cost_terms) {
 //             sliding_window_filter_->addCostTerm(meas_cost_term); // Add point-to-plane cost terms | this is only if not using p2psupercostterm
 //         }
 // #ifdef DEBUG
-//             std::cout << "[ICP DEBUG] sliding_window_filter_: add pose_meas_cost_terms total: " << pose_meas_cost_terms.size() << std::endl;
+//             std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "sliding_window_filter_: add pose_meas_cost_terms total: " << pose_meas_cost_terms.size() << std::endl;
 // #endif
 //         for (const auto& pose_cost : pose_meas_cost_terms) {
 //             sliding_window_filter_->addCostTerm(pose_cost); // Add pose measurement cost terms
 //         }
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] sliding_window_filter_: add imu_cost_terms total: " << imu_cost_terms.size() << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "sliding_window_filter_: add imu_cost_terms total: " << imu_cost_terms.size() << std::endl;
 #endif
         for (const auto& imu_cost : imu_cost_terms) {
             sliding_window_filter_->addCostTerm(imu_cost); // Add IMU cost terms
         }
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] sliding_window_filter_: add imu_prior_cost_terms total: " << imu_prior_cost_terms.size() << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "sliding_window_filter_: add imu_prior_cost_terms total: " << imu_prior_cost_terms.size() << std::endl;
 #endif
         for (const auto& imu_prior_cost : imu_prior_cost_terms) {
             sliding_window_filter_->addCostTerm(imu_prior_cost); // Add IMU bias prior cost terms
         }
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] sliding_window_filter_: add Ti2m_prior_cost_terms total: " << Ti2m_prior_cost_terms.size() << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "sliding_window_filter_: add Ti2m_prior_cost_terms total: " << Ti2m_prior_cost_terms.size() << std::endl;
 #endif
         for (const auto& Ti2m_prior_cost : Ti2m_prior_cost_terms) {
             sliding_window_filter_->addCostTerm(Ti2m_prior_cost); // Add Ti2m prior cost terms
         }
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] sliding_window_filter_: add p2p_super_cost_term total." << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "sliding_window_filter_: add p2p_super_cost_term total." << std::endl;
 #endif
         sliding_window_filter_->addCostTerm(p2p_super_cost_term); // Add point-to-plane super cost term
 //         if (options_.use_imu) {
 // #ifdef DEBUG
-//             std::cout << "[ICP DEBUG] sliding_window_filter_: add imu_super_cost_term." << std::endl;
+//             std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "sliding_window_filter_: add imu_super_cost_term." << std::endl;
 // #endif
 //             sliding_window_filter_->addCostTerm(imu_super_cost_term); // Add IMU super cost term
 //         }
 
 #ifdef DEBUG
-        std::cout << "[ICP DEBUG] sliding_window_filter_: number of variables: " << sliding_window_filter_->getNumberOfVariables() << std::endl;
-        std::cout << "[ICP DEBUG] sliding_window_filter_: number of cost terms: " << sliding_window_filter_->getNumberOfCostTerms() << std::endl;
+        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "sliding_window_filter_: number of variables: " << sliding_window_filter_->getNumberOfVariables() << std::endl;
+        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "sliding_window_filter_: number of cost terms: " << sliding_window_filter_->getNumberOfCostTerms() << std::endl;
 #endif
 
         // Step 50: Validate and optimize the sliding window filter
@@ -3219,7 +3217,7 @@ namespace  stateestimate{
 
 //         finalicp::Covariance covariance(solver);
 // #ifdef DEBUG
-//         std::cout << "[ICP DEBUG] SLAM_TRAJ: getCovariance." << std::endl;
+//         std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_TRAJ: getCovariance." << std::endl;
 // #endif
 //         current_estimate.mid_state_cov = SLAM_TRAJ->getCovariance(covariance, trajectory_vars_[prev_trajectory_var_index].time);
 
@@ -3250,33 +3248,33 @@ namespace  stateestimate{
             const auto bias_intp_eval = finalicp::vspace::VSpaceInterpolator<6>::MakeShared(curr_mid_slam_time, trajectory_vars_[i].imu_biases, trajectory_vars_[i].time, trajectory_vars_[i + 1].imu_biases, trajectory_vars_[i + 1].time);
             current_estimate.mid_b = bias_intp_eval->value();
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG] mid_Ti2m:\n" << current_estimate.mid_Ti2m << std::endl;
-            std::cout << "[ICP DEBUG] b_begin: " << trajectory_vars_[i].imu_biases->value().transpose() << std::endl;
-            std::cout << "[ICP DEBUG] b_end: " << trajectory_vars_[i + 1].imu_biases->value().transpose() << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "mid_Ti2m:\n" << current_estimate.mid_Ti2m << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "b_begin: " << trajectory_vars_[i].imu_biases->value().transpose() << std::endl;
+            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "b_end: " << trajectory_vars_[i + 1].imu_biases->value().transpose() << std::endl;
 #endif
         }
 
         // Step 54: Validate final estimate parameters
         // Ensures keypoints, velocities, and accelerations are valid
 #ifdef DEBUG
-        std::cout << "[ICP DEBUG] ESTIMATED PARAMETER" << std::endl;
-        std::cout << "[ICP DEBUG] Number of keypoints used in CT-ICP : " << N_matches << std::endl;
-        std::cout << "[ICP DEBUG] v_begin: " << v_begin.transpose() << std::endl;
-        std::cout << "[ICP DEBUG] v_end: " << v_end.transpose() << std::endl;
-        std::cout << "[ICP DEBUG] a_begin: " << a_begin.transpose() << std::endl;
-        std::cout << "[ICP DEBUG] a_end: " << a_end.transpose() << std::endl;
-        std::cout << "[ICP DEBUG] Number iterations CT-ICP : " << options_.num_iters_icp << std::endl;
-        std::cout << "[ICP DEBUG] Translation Begin: " << trajectory_[index_frame].begin_t.transpose() << std::endl;
-        std::cout << "[ICP DEBUG] Translation End: " << trajectory_[index_frame].end_t.transpose() << std::endl;
+        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "ESTIMATED PARAMETER" << std::endl;
+        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Number of keypoints used in CT-ICP : " << N_matches << std::endl;
+        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "v_begin: " << v_begin.transpose() << std::endl;
+        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "v_end: " << v_end.transpose() << std::endl;
+        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "a_begin: " << a_begin.transpose() << std::endl;
+        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "a_end: " << a_end.transpose() << std::endl;
+        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Number iterations CT-ICP : " << options_.num_iters_icp << std::endl;
+        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Translation Begin: " << trajectory_[index_frame].begin_t.transpose() << std::endl;
+        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Translation End: " << trajectory_[index_frame].end_t.transpose() << std::endl;
 #endif
 
 #ifdef DEBUG
-        std::cout << "[ICP DEBUG] INNER LOOP TIMERS" << std::endl;
+        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "INNER LOOP TIMERS" << std::endl;
         for (size_t i = 0; i < timer.size(); i++) {
             std::cout << "Elapsed " << timer[i].first << *(timer[i].second) << std::endl;
         }
         // [DEBUG] Final status report before returning
-        std::cout << "[ICP DEBUG] Finished ICP for frame " << index_frame << ". Success: " << (icp_success ? "true" : "false") << std::endl;
+        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Finished ICP for frame " << index_frame << ". Success: " << (icp_success ? "true" : "false") << std::endl;
 #endif
 
         // Step 55: Return success status
