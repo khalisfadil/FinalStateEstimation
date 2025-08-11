@@ -34,31 +34,33 @@ namespace  stateestimate{
 
         // Step 1: Build the downsampled voxel map
         VoxelMap voxel_map;
-        if (frame.size() < static_cast<size_t>(sequential_threshold)) {
-#ifdef DEBUG
-        // std::cout << "[SUB_SAMPLE] Using sequential path (size < " << sequential_threshold << ")." << std::endl;
-#endif
-            // Use a simple sequential path for small frames
-            voxel_map.reserve(frame.size() / 2);
-            for (const auto& point : frame) {
-                // [DEBUG] Add a check for non-finite points which can corrupt voxel calculation
-                if (!point.pt.allFinite()) {
-#ifdef DEBUG
-                    std::cout << "[SUB_SAMPLE] WARNING: Skipping non-finite point during sequential voxelization." << std::endl;
-#endif
-                    continue;
-                }
+        build_voxel_map(frame, size_voxel, voxel_map, sequential_threshold);
 
-                Voxel voxel = Voxel::Coordinates(point.pt, size_voxel);
-                voxel_map.try_emplace(voxel, point);
-            }
-        } else {
-#ifdef DEBUG
-            // std::cout << "[SUB_SAMPLE] Using parallel path (build_voxel_map)." << std::endl;
-#endif
-            // Use the efficient parallel builder for large frames
-            build_voxel_map(frame, size_voxel, voxel_map, sequential_threshold);
-        }
+//         if (frame.size() < static_cast<size_t>(sequential_threshold)) {
+// #ifdef DEBUG
+//         // std::cout << "[SUB_SAMPLE] Using sequential path (size < " << sequential_threshold << ")." << std::endl;
+// #endif
+//             // Use a simple sequential path for small frames
+//             voxel_map.reserve(frame.size() / 2);
+//             for (const auto& point : frame) {
+//                 // [DEBUG] Add a check for non-finite points which can corrupt voxel calculation
+//                 if (!point.pt.allFinite()) {
+// #ifdef DEBUG
+//                     std::cout << "[SUB_SAMPLE] WARNING: Skipping non-finite point during sequential voxelization." << std::endl;
+// #endif
+//                     continue;
+//                 }
+
+//                 Voxel voxel = Voxel::Coordinates(point.pt, size_voxel);
+//                 voxel_map.try_emplace(voxel, point);
+//             }
+//         } else {
+// #ifdef DEBUG
+//             // std::cout << "[SUB_SAMPLE] Using parallel path (build_voxel_map)." << std::endl;
+// #endif
+//             // Use the efficient parallel builder for large frames
+//             build_voxel_map(frame, size_voxel, voxel_map, sequential_threshold);
+//       }
 
 #ifdef DEBUG
         // std::cout << "[SUB_SAMPLE] Voxel map created with " << voxel_map.size() << " unique voxels." << std::endl;
