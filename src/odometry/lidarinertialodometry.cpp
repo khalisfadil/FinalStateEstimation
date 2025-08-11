@@ -705,6 +705,34 @@ namespace  stateestimate{
 #ifdef DEBUG
         std::cout << "[DECONSTRUCT] Dumping trajectory. - DONE" << std::endl;
 #endif
+
+        // --- Point Cloud Output ---
+        std::string pointcloud_filename = options_.debug_path + "/map_" + timestamp + ".txt";
+        std::ofstream pointcloud_file(pointcloud_filename, std::ios::out);
+        if (!pointcloud_file.is_open()) {
+#ifdef DEBUG
+                std::cout << "[DECONSTRUCT] Failed to open point cloud file: " << pointcloud_filename << std::endl;
+#endif
+                return; // Avoid further operations if point cloud file cannot be opened
+            }
+#ifdef DEBUG
+        std::cout << "[DECONSTRUCT] Dumping map point cloud." << std::endl;
+#endif
+        // Retrieve point cloud from map
+        ArrayVector3d map_points = map_.pointcloud(); // Assuming map_ is a private member of type Map
+        // Buffer point cloud output
+        std::stringstream pointcloud_buffer;
+        pointcloud_buffer << std::fixed << std::setprecision(12);
+        for (const auto& point : map_points) {
+            pointcloud_buffer << point.x() << " " << point.y() << " " << point.z() << "\n";
+        }
+        // Write buffered point cloud output to file
+        pointcloud_file << pointcloud_buffer.str();
+        pointcloud_file.close();
+
+#ifdef DEBUG
+        std::cout << "[DECONSTRUCT] Dumping map point cloud. - DONE" << std::endl;
+#endif
     }
 
     // ########################################################################
@@ -1636,7 +1664,6 @@ namespace  stateestimate{
 
 #ifdef DEBUG
     // [DEBUG] Initial check at the start of the function
-    std::cout << "[ICP DEBUG | Frame " << index_frame << "]" << std::endl;
     std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Starting with " << keypoints.size() << " keypoints." <<  ", "<< imu_data_vec.size() << " IMU datas." <<  ", "<< pose_data_vec.size() << " pose datas." << std::endl;
 #endif
 
