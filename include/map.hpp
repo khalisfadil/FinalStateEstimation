@@ -116,6 +116,15 @@ namespace stateestimate {
             }
         }
 
+        void dumpToStream(std::ostream& os, int precision = 12) const {
+            os << std::fixed << std::setprecision(precision);
+            for (const auto& [_, block] : voxel_map_) {
+                for (const auto& point : block.points) {
+                    os << point.x() << " " << point.y() << " " << point.z() << "\n";
+                }
+            }
+        }
+
         // --- Neighbor Search ---
 
         using pair_distance_t = std::tuple<double, Eigen::Vector3d, Voxel>;

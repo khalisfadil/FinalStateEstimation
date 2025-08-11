@@ -711,25 +711,16 @@ namespace  stateestimate{
         std::ofstream pointcloud_file(pointcloud_filename, std::ios::out);
         if (!pointcloud_file.is_open()) {
 #ifdef DEBUG
-                std::cout << "[DECONSTRUCT] Failed to open point cloud file: " << pointcloud_filename << std::endl;
+            std::cout << "[DECONSTRUCT] Failed to open point cloud file: " << pointcloud_filename << std::endl;
 #endif
-                return; // Avoid further operations if point cloud file cannot be opened
-            }
+            return;
+        }
 #ifdef DEBUG
         std::cout << "[DECONSTRUCT] Dumping map point cloud." << std::endl;
 #endif
-        // Retrieve point cloud from map
-        ArrayVector3d map_points = map_.pointcloud(); // Assuming map_ is a private member of type Map
-        // Buffer point cloud output
-        std::stringstream pointcloud_buffer;
-        pointcloud_buffer << std::fixed << std::setprecision(12);
-        for (const auto& point : map_points) {
-            pointcloud_buffer << point.x() << " " << point.y() << " " << point.z() << "\n";
-        }
-        // Write buffered point cloud output to file
-        pointcloud_file << pointcloud_buffer.str();
+        // Stream directly without allocation
+        map_.dumpToStream(pointcloud_file);
         pointcloud_file.close();
-
 #ifdef DEBUG
         std::cout << "[DECONSTRUCT] Dumping map point cloud. - DONE" << std::endl;
 #endif
@@ -919,7 +910,7 @@ namespace  stateestimate{
             summary.keypoints = keypoints;
             if (!summary.success) {
 #ifdef DEBUG
-                std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "ICP failed for frame " << index_frame << ". Returning early." << std::endl;
+                std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "ICP failed for frame " << index_frame << std::endl;
 #endif
                 return summary;}
         } else { // !!!!!!!!!!! this is responsible for initial frame 0 ######################
