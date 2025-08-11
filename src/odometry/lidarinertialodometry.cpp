@@ -808,7 +808,7 @@ namespace  stateestimate{
             summary.success = false;
             return summary;
         }
-        
+
 #ifdef DEBUG
         // [DEBUG] Announce the start of processing for a new frame
         std::cout << "[REG DEBUG | Frame " << index_frame << "]" << "Starting RegisterFrame for index " << index_frame << std::endl;
@@ -1111,7 +1111,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
             // [ADDED DEBUG] Print all calculated timestamps before assignment
-            std::cout << "[INIT TS DEBUG | Frame " << index frame << "] " << "Frame " << index_frame << ": min=" << std::fixed << min_timestamp
+            std::cout << "[INIT TS DEBUG | Frame " << index_frame << "] " << "Frame " << index_frame << ": min=" << std::fixed << min_timestamp
                     << ", max=" << max_timestamp << ", mid=" << mid_timestamp << std::endl;
 #endif
 
@@ -1138,7 +1138,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [ADDED DEBUG] Announce entry into the function
-        std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Initializing motion for frame " << index_frame << ". ---" << std::endl;
+        std::cout << "[INIT MOTION DEBUG | Frame " << index_frame << "] " << "Initializing motion for frame " << index_frame << ". ---" << std::endl;
 #endif
 
         if (index_frame == 0) { //MAIN ALLERT as T_sr is identity. T_ms is exactly same as T_mr
@@ -1170,12 +1170,12 @@ namespace  stateestimate{
 
 #ifdef DEBUG
             // [ADDED DEBUG] Print the initial transformations for Frame 0
-            std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Frame 0: Using initial pose from options." << std::endl;
-            std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Frame 0: Initial Sensor Pose (Ts2m):\n" << Ts2m << std::endl;
+            std::cout << "[INIT MOTION DEBUG | Frame " << index_frame << "] " << "Frame 0: Using initial pose from options." << std::endl;
+            std::cout << "[INIT MOTION DEBUG | Frame " << index_frame << "] " << "Frame 0: Initial Sensor Pose (Ts2m):\n" << Ts2m << std::endl;
             if (!Ts2m.allFinite()) {
-                std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "CRITICAL: Initial pose Ts2m is non-finite (NaN or inf)!" << std::endl;
+                std::cout << "[INIT MOTION DEBUG | Frame " << index_frame << "] " << "CRITICAL: Initial pose Ts2m is non-finite (NaN or inf)!" << std::endl;
             } else {
-                std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Initial pose Ts2m is finite." << std::endl;
+                std::cout << "[INIT MOTION DEBUG | Frame " << index_frame << "] " << "Initial pose Ts2m is finite." << std::endl;
             }
 #endif
             // 5. Set the trajectory's initial pose.
@@ -1193,13 +1193,13 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [ADDED DEBUG] Confirm the pose was copied for Frame 1
-        std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Frame 1: Copying pose from end of Frame 0." << std::endl;
-        std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Frame 1: Initial Pose (Rotation):\n" << trajectory_[index_frame].begin_R << std::endl;
-        std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Frame 1: Initial Pose (Translation): " << trajectory_[index_frame].begin_t.transpose() << std::endl;
+        std::cout << "[INIT MOTION DEBUG | Frame " << index_frame << "] " << "Frame 1: Copying pose from end of Frame 0." << std::endl;
+        std::cout << "[INIT MOTION DEBUG | Frame " << index_frame << "] " << "Frame 1: Initial Pose (Rotation):\n" << trajectory_[index_frame].begin_R << std::endl;
+        std::cout << "[INIT MOTION DEBUG | Frame " << index_frame << "] " << "Frame 1: Initial Pose (Translation): " << trajectory_[index_frame].begin_t.transpose() << std::endl;
         if (!trajectory_[index_frame].begin_R.allFinite() || !trajectory_[index_frame].end_R.allFinite() || !trajectory_[index_frame].begin_t.allFinite() || !trajectory_[index_frame].end_t.allFinite()) {
-            std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "CRITICAL: Initial pose Ts2m is non-finite (NaN or inf)!" << std::endl;
+            std::cout << "[INIT MOTION DEBUG | Frame " << index_frame << "] " << "CRITICAL: Initial pose Ts2m is non-finite (NaN or inf)!" << std::endl;
         } else {
-            std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Initial pose T_ms is finite." << std::endl;
+            std::cout << "[INIT MOTION DEBUG | Frame " << index_frame << "] " << "Initial pose T_ms is finite." << std::endl;
         }
 #endif
         
@@ -1222,13 +1222,13 @@ namespace  stateestimate{
 
 #ifdef DEBUG
             // [ADDED DEBUG] Show the extrapolated motion
-            std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Frame " << index_frame << ": Extrapolating motion." << std::endl;
-            std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Relative Motion (t_rel): " << t_rel.transpose() << std::endl;
-            std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Extrapolated End Pose (Translation): " << trajectory_[index_frame].end_t.transpose() << std::endl;
+            std::cout << "[INIT MOTION DEBUG | Frame " << index_frame << "] " << "Frame " << index_frame << ": Extrapolating motion." << std::endl;
+            std::cout << "[INIT MOTION DEBUG | Frame " << index_frame << "] " << "Relative Motion (t_rel): " << t_rel.transpose() << std::endl;
+            std::cout << "[INIT MOTION DEBUG | Frame " << index_frame << "] " << "Extrapolated End Pose (Translation): " << trajectory_[index_frame].end_t.transpose() << std::endl;
             if (!trajectory_[index_frame].begin_R.allFinite() || !trajectory_[index_frame].end_R.allFinite() || !trajectory_[index_frame].begin_t.allFinite() || !trajectory_[index_frame].end_t.allFinite()) {
-                std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "CRITICAL: Initial pose T_ms is non-finite (NaN or inf)!" << std::endl;
+                std::cout << "[INIT MOTION DEBUG | Frame " << index_frame << "] " << "CRITICAL: Initial pose T_ms is non-finite (NaN or inf)!" << std::endl;
             } else {
-                std::cout << "[INIT MOTION DEBUG | Frame " << index frame << "] " << "Initial pose T_ms is finite." << std::endl;
+                std::cout << "[INIT MOTION DEBUG | Frame " << index_frame << "] " << "Initial pose T_ms is finite." << std::endl;
             }
 #endif
         }
