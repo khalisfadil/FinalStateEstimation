@@ -84,8 +84,8 @@ namespace stateestimate {
             std::vector<Point3D> keypoints;                      // Last Keypoints selected
             std::vector<Point3D> corrected_points;               // Sampled points expressed in the initial frame
             std::vector<Point3D> all_corrected_points;           // Initial points expressed in the initial frame
-            Eigen::Matrix3d R_ms = Eigen::Matrix3d::Identity();  // The rotation between the initial frame and the new frame
-            Eigen::Vector3d t_ms = Eigen::Vector3d::Zero();      // The translation between the initial frame and the new frame
+            Eigen::Matrix3d Rs2m = Eigen::Matrix3d::Identity();  // The rotation between the initial frame and the new frame
+            Eigen::Vector3d ts2m = Eigen::Vector3d::Zero();      // The translation between the initial frame and the new frame
             bool success = true;                                 // Whether the registration was a success
         };
 
@@ -94,7 +94,7 @@ namespace stateestimate {
 
         // It's virtual, but not pure virtual (= 0), so derived classes are not
         // required to implement it. The empty {} means it does nothing by default.
-        virtual void initT(const Eigen::Matrix4d& T) {}
+        virtual void initT(const Eigen::Matrix4d& T) = 0;
 
     protected:
         Trajectory trajectory_; // std::vector<TrajectoryFrame>; in trajectory.hpp

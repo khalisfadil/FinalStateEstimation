@@ -1,28 +1,21 @@
 #pragma once
 
-#include <nlohmann/json.hpp>
-#include <fstream>
-#include <set>
-#include <problem/costterm/imusupercostterm.hpp>
-#include <problem/costterm/p2psupercostterm.hpp>
-#include <solver/gausnewtonsolver.hpp>
-#include <odometry.hpp>
 #include <slam.hpp>
-#include <evaluable/vspace/vspaceinterpolator.hpp>
-#include <tbb/tbb.h>
-#include <tbb/parallel_for.h>
-#include <tbb/blocked_range.h>
-#include <tbb/global_control.h>
-#include <tbb/concurrent_vector.h>
-// #include <glog/logging.h>
+#include <odometry.hpp>
+#include <problem/costterm/imusupercostterm.hpp>
+#include <problem/costterm/gyrosupercostterm.hpp>
+#include <problem/costterm/p2pconstvelsupercostterm.hpp>
+#include <problem/costterm/preintgratedaccelcostterm.hpp>
+
 #include <common/stopwatch.hpp>
 
+#include <tbb/parallel_reduce.h>
+#include <tbb/blocked_range.h>
+
 namespace stateestimate {
-
-    class lidarinertialodom : public Odometry {
+    class lidarodom : public Odometry {
         public:
-            using Matrix18d = Eigen::Matrix<double, 18, 18>;
-
+            using Matrix12d = Eigen::Matrix<double, 12, 12>;
             enum class LOSS_FUNC { L2, DCS, CAUCHY, GM };
 
             struct Neighborhood {
@@ -39,18 +32,16 @@ namespace stateestimate {
                 
                 /// Fixed transformation from the robot's body frame to the sensor's frame (e.g., LiDAR). This is the extrinsic calibration.
                 Eigen::Matrix<double, 4, 4> Tb2s = Eigen::Matrix<double, 4, 4>::Identity();
-
+                
                 // ----------------------------------------------------------------------------------
                 // Continuous-Time Trajectory Model Parameters
                 // ----------------------------------------------------------------------------------
 
                 /// Diagonal elements of the continuous-time motion model's process noise covariance matrix ($Q_c$). Controls the uncertainty of motion.
                 Eigen::Matrix<double, 6, 1> qc_diag = Eigen::Matrix<double, 6, 1>::Ones();
-                /// Diagonal elements of the maneuverability matrix ($A_d$) for the Singer motion model. Influences how quickly the acceleration can change.
-                Eigen::Matrix<double, 6, 1> ad_diag = Eigen::Matrix<double, 6, 1>::Ones();
                 /// Number of additional states (knots) to add between the start and end of a scan for the continuous-time trajectory.
                 int num_extra_states = 0;
-
+                
                 // ----------------------------------------------------------------------------------
                 // Point-to-Plane (P2P) ICP Parameters
                 // ----------------------------------------------------------------------------------
@@ -99,8 +90,18 @@ namespace stateestimate {
                 bool use_final_state_value = false;
                 /// If true, the ICP loop can terminate early if the state change is below a threshold.
                 bool break_icp_early = true;
+                /// Whether to remove voxels from the map after a certain number of frames have passed (their 'lifetime').
+                bool swf_inside_icp_at_begin = true;
                 /// Whether to use a line search algorithm within the Gauss-Newton solver to find a better step size.
                 bool use_line_search = false;
+                /// Whether to use a line search algorithm within the Gauss-Newton solver to find a better step size.
+                bool use_elastic_initialization = false;
+                /// Whether to use a line search algorithm within the Gauss-Newton solver to find a better step size.
+                double keyframe_translation_threshold_m = 0.0;
+                /// Whether to use a line search algorithm within the Gauss-Newton solver to find a better step size.
+                double keyframe_rotation_threshold_deg = 0.0;
+                /// Whether to use a line search algorithm within the Gauss-Newton solver to find a better step size.
+                bool use_pointtopoint_factors = false;
 
                 // ----------------------------------------------------------------------------------
                 // IMU Parameters
@@ -109,25 +110,19 @@ namespace stateestimate {
                 /// Magnitude of the gravity vector. A positive value suggests a North-East-Down (NED) or similar z-down coordinate system.
                 double gravity = 9.8042; 
                 /// Whether to use IMU data to constrain the motion model.
-                bool use_imu = true;
+                bool use_imu = false;
                 /// Whether to use the accelerometer part of the IMU data (in addition to the gyroscope).
-                bool use_accel = true;
+                bool use_accel = false;
                 /// Diagonal elements of the measurement noise covariance for the accelerometer ($R_{acc}$).
                 Eigen::Matrix<double, 3, 1> r_imu_acc = Eigen::Matrix<double, 3, 1>::Zero();
                 /// Diagonal elements of the measurement noise covariance for the gyroscope ($R_{gyro}$).
                 Eigen::Matrix<double, 3, 1> r_imu_ang = Eigen::Matrix<double, 3, 1>::Zero();
-                /// Measurement noise for an external pose source (if available).
-                Eigen::Matrix<double, 6, 1> r_pose = Eigen::Matrix<double, 6, 1>::Zero();
                 /// Initial uncertainty (covariance, $P_0$) for the accelerometer bias.
                 Eigen::Matrix<double, 3, 1> p0_bias_accel = Eigen::Matrix<double, 3, 1>::Ones();
-                /// Prior covariance ($P_k$) on the accelerometer bias for frames after initialization.
-                double pk_bias_accel = 0.0001;
                 /// Process noise (covariance, $Q$) for the accelerometer bias random walk model (how much it can drift over time).
                 Eigen::Matrix<double, 3, 1> q_bias_accel = Eigen::Matrix<double, 3, 1>::Ones();
                 /// Initial uncertainty (covariance, $P_0$) for the gyroscope bias.
                 double p0_bias_gyro = 0.0001;
-                /// Prior covariance ($P_k$) on the gyroscope bias for frames after initialization.
-                double pk_bias_gyro = 0.0001;
                 /// Process noise (covariance, $Q$) for the gyroscope bias random walk model.
                 double q_bias_gyro = 0.0001;
                 /// Type of robust loss function for accelerometer errors.
@@ -145,45 +140,30 @@ namespace stateestimate {
 
                 /// If true, the IMU-to-Map extrinsic ($T_{i2m}$) is only optimized at the beginning and then held fixed.
                 bool Ti2m_init_only = true;
-                /// If true, use a ground truth value for the IMU-to-Map extrinsic ($T_{i2m}$) instead of estimating it.
-                bool use_Ti2m_gt = false;
-                /// The ground truth IMU-to-Map extrinsic, represented as a 6D vector (translation + rotation).
-                Eigen::Matrix<double, 6, 1> xi_g2i = Eigen::Matrix<double, 6, 1>::Ones();
                 /// Initial covariance for the $T_{i2m}$ estimation.
                 Eigen::Matrix<double, 6, 1> Ti2m_init_cov = Eigen::Matrix<double, 6, 1>::Ones();
                 /// Process noise for the IMU-to-Map extrinsic ($T_{mi}$) if it's continuously estimated.
                 Eigen::Matrix<double, 6, 1> qg_diag = Eigen::Matrix<double, 6, 1>::Ones();
-                /// Prior covariance on $T_{i2m}$ for frames after initialization.
-                Eigen::Matrix<double, 6, 1> Ti2m_prior_cov = Eigen::Matrix<double, 6, 1>::Ones();
-                /// Whether to apply the $T_{mi}$ prior after the initial frames.
-                bool use_Ti2m_prior_after_init = false;
-                /// Whether to apply a prior on the IMU biases after the initial frames.
-                bool use_bias_prior_after_init = false;
 
                 // ----------------------------------------------------------------------------------
                 // Initial State Priors (for the very first frame)
                 // ----------------------------------------------------------------------------------
                 /// Programmatically set initial pose mean. Use setInitialPose() to populate this.
                 Eigen::Matrix<double, 4, 4> Tm2b_init = Eigen::Matrix<double, 4, 4>::Identity();
-                /// Initial uncertainty (covariance, $P_0$) for the robot's pose.
-                Eigen::Matrix<double, 6, 1> p0_pose = Eigen::Matrix<double, 6, 1>::Ones();
-                /// Initial uncertainty (covariance, $P_0$) for the robot's velocity.
-                Eigen::Matrix<double, 6, 1> p0_vel = Eigen::Matrix<double, 6, 1>::Ones();
-                /// Initial uncertainty (covariance, $P_0$) for the robot's acceleration.
-                Eigen::Matrix<double, 6, 1> p0_accel = Eigen::Matrix<double, 6, 1>::Ones();
-                
+
                 // ----------------------------------------------------------------------------------
                 // Map Management
                 // ----------------------------------------------------------------------------------
 
                 /// Whether to remove voxels from the map after a certain number of frames have passed (their 'lifetime').
                 bool filter_lifetimes = false;
+                
             };
 
             static Options parse_json_options(const std::string& json_path);
 
-            lidarinertialodom(const std::string& json_path);
-            ~lidarinertialodom();
+            lidarodom(const std::string& json_path);
+            ~lidarodom();
 
             Trajectory trajectory() override;
             RegistrationSummary registerFrame(const DataFrame& frame) override;
@@ -193,7 +173,6 @@ namespace stateestimate {
         private:
             inline double AngularDistance(const Eigen::Matrix3d& rota, const Eigen::Matrix3d& rotb);
             void sub_sample_frame(std::vector<Point3D>& frame, double size_voxel, int sequential_threshold);
-            void sub_sample_frame_outlier_removal(std::vector<Point3D>& frame, double size_voxel,  int sequential_threshold);
             void grid_sampling(const std::vector<Point3D>& frame, std::vector<Point3D>& keypoints, double size_voxel_subsampling, int sequential_threshold);
             void initializeTimestamp(int index_frame, const DataFrame& const_frame);
             Neighborhood compute_neighborhood_distribution(const ArrayVector3d& points, int sequential_threshold);
@@ -201,10 +180,9 @@ namespace stateestimate {
             void initializeMotion(int index_frame);
             std::vector<Point3D> initializeFrame(int index_frame, const std::vector<Point3D>& const_frame);
             void updateMap(int index_frame, int update_frame);
-            bool icp(int index_frame, std::vector<Point3D>& keypoints, const std::vector<finalicp::IMUData>& imu_data_vec, const std::vector<PoseData>& pose_data_vec);
+            bool icp(int index_frame, std::vector<Point3D>& keypoints, const std::vector<finalicp::IMUData>& imu_data_vec);
             void build_voxel_map(const std::vector<Point3D>& frame, double size_voxel, 
-                                                tsl::robin_map<Voxel, Point3D, VoxelHash>& voxel_map, int sequential_threshold);
-
+                                                tsl::robin_map<Voxel, Point3D, VoxelHash>& voxel_map, int sequential_threshold);    
         private:
             Options options_;
             finalicp::se3::SE3StateVar::Ptr Tb2s_var_ = nullptr;  // robot to sensor transformation as a slam variable
@@ -225,13 +203,14 @@ namespace stateestimate {
                 finalicp::vspace::VSpaceStateVar<6>::Ptr imu_biases;
                 finalicp::se3::SE3StateVar::Ptr Ti2m;
             };
-
             std::vector<TrajectoryVar> trajectory_vars_;
             size_t to_marginalize_ = 0;
-            std::map<double, std::pair<Matrix18d, Matrix18d>> interp_mats_;
+            std::map<double, std::pair<Matrix12d, Matrix12d>> interp_mats_;
             finalicp::SlidingWindowFilter::Ptr sliding_window_filter_;
 
-            SLAM_REGISTER_ODOMETRY("SLAM_LIDAR_INERTIAL_ODOM", lidarinertialodom);
-    };
+            Eigen::Vector3d t_prev_ = Eigen::Vector3d::Zero();
+            Eigen::Matrix3d r_prev_ = Eigen::Matrix3d::Identity();
 
-} // namespace stateestimate
+            SLAM_REGISTER_ODOMETRY("SLAM_LIDAR_ODOM", lidarodom);
+    };
+}    // namespace stateestimate
