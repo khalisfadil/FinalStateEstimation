@@ -476,7 +476,6 @@ namespace  stateestimate{
         try {
             // Define trajectory file writing task
             auto write_trajectory = [&]() {
-                // ... (The exact same logic as your original destructor) ...
                 std::ofstream trajectory_file(trajectory_filename, std::ios::out);
                 if (!trajectory_file.is_open()) {
                     std::cerr << "[saveResults] ERROR: Failed to open trajectory file for writing: " << trajectory_filename << std::endl;
@@ -518,8 +517,12 @@ namespace  stateestimate{
                 map_.dumpToStream(pointcloud_file);
             };
 
-            // Execute both tasks in parallel
-            tbb::parallel_invoke(write_trajectory, write_pointcloud);
+            // --- MODIFICATION: Execute both tasks sequentially instead of in parallel ---
+            std::cout << "[saveResults] Writing trajectory file..." << std::endl;
+            write_trajectory();
+            std::cout << "[saveResults] Writing point cloud file..." << std::endl;
+            write_pointcloud();
+            // --- END MODIFICATION ---
 
             std::cout << "[saveResults] Successfully saved results to " << options_.debug_path << std::endl;
 
