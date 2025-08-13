@@ -95,6 +95,7 @@ namespace stateestimate {
         // It's virtual, but not pure virtual (= 0), so derived classes are not
         // required to implement it. The empty {} means it does nothing by default.
         virtual void initT(const Eigen::Matrix4d& T) = 0;
+        virtual void saveResults(const std::string& timestamp) = 0;
 
     protected:
         Trajectory trajectory_; // std::vector<TrajectoryFrame>; in trajectory.hpp
