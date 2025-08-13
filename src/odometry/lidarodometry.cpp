@@ -477,9 +477,9 @@ namespace  stateestimate{
             }
 
             // Build full trajectory
-            auto full_trajectory = finalicp::traj::const_acc::Interface::MakeShared(options_.qc_diag);
+            auto full_trajectory = finalicp::traj::const_vel::Interface::MakeShared(options_.qc_diag);
             for (const auto& var : trajectory_vars_) {
-                full_trajectory->add(var.time, var.Tm2b, var.wb2m_inr, var.dwb2m_inr);
+                full_trajectory->add(var.time, var.Tm2b, var.wb2m_inr);
             }
 
             // Buffer output in stringstream
