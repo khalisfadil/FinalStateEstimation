@@ -189,6 +189,7 @@ namespace stateestimate {
             RegistrationSummary registerFrame(const DataFrame& frame) override;
 
             void initT(const Eigen::Matrix4d& T) override; // please assure what is your T, either Tmr or Trm.
+            void saveResults(const std::string& timestamp) override;
 
         private:
             inline double AngularDistance(const Eigen::Matrix3d& rota, const Eigen::Matrix3d& rotb);
