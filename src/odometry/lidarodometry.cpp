@@ -448,81 +448,80 @@ namespace  stateestimate{
     // ########################################################################
     // ~lidarodom deconstructor
     // ########################################################################
+    lidarodom::~lidarodom() {}
 
-    lidarodom::~lidarodom() {
+    // ########################################################################
+    // saveResults
+    // ########################################################################
+    void lidarodom::saveResults(const std::string& timestamp) {
         using namespace finalicp::traj;
 
-        // Skip if trajectory is empty
+        // --- Safety Check: Don't do anything if there's no data ---
         if (trajectory_.empty() || trajectory_vars_.empty()) {
+            std::cout << "[saveResults] Trajectory is empty, skipping file write." << std::endl;
             return;
         }
 
-        // Build filename with UTC timestamp
-        auto now = std::chrono::system_clock::now();
-        auto utc_time = std::chrono::system_clock::to_time_t(now);
-        std::stringstream ss;
-        ss << std::put_time(std::gmtime(&utc_time), "%Y%m%d_%H%M%S");
-        std::string timestamp = ss.str();
+        std::cout << "[saveResults] Saving final trajectory and map..." << std::endl;
+
+        // --- Create filenames using the provided timestamp ---
         std::string trajectory_filename = options_.debug_path + "/trajectory_" + timestamp + ".txt";
         std::string pointcloud_filename = options_.debug_path + "/map_" + timestamp + ".txt";
 
-#ifdef DEBUG
-            std::cout << "[DECONSTRUCT] Start building full trajectory and map." << std::endl;
-#endif
-        // Define trajectory file writing task
-        auto write_trajectory = [&]() {
-            std::ofstream trajectory_file(trajectory_filename, std::ios::out);
-            if (!trajectory_file.is_open()) {
-                return;
-            }
+        // --- Wrap file-writing logic in a try-catch block for maximum safety ---
+        try {
+            // Define trajectory file writing task
+            auto write_trajectory = [&]() {
+                // ... (The exact same logic as your original destructor) ...
+                std::ofstream trajectory_file(trajectory_filename, std::ios::out);
+                if (!trajectory_file.is_open()) {
+                    std::cerr << "[saveResults] ERROR: Failed to open trajectory file for writing: " << trajectory_filename << std::endl;
+                    return;
+                }
 
-            // Build full trajectory
-            auto full_trajectory = finalicp::traj::const_vel::Interface::MakeShared(options_.qc_diag);
-            for (const auto& var : trajectory_vars_) {
-                full_trajectory->add(var.time, var.Tm2b, var.wb2m_inr);
-            }
+                auto full_trajectory = finalicp::traj::const_vel::Interface::MakeShared(options_.qc_diag);
+                for (const auto& var : trajectory_vars_) {
+                    full_trajectory->add(var.time, var.Tm2b, var.wb2m_inr);
+                }
 
-            // Buffer output in stringstream
-            std::stringstream buffer;
-            buffer << std::fixed << std::setprecision(12);
-            double begin_time = trajectory_.front().begin_timestamp;
-            double end_time = trajectory_.back().end_timestamp;
-            constexpr double dt = 0.01; // Hardcoded as in original
-            for (double time = begin_time; time <= end_time; time += dt) {
-                Time traj_time(time);
-                const auto Tm2b = full_trajectory->getPoseInterpolator(traj_time)->value().matrix();
-                const auto wb2m_inr = full_trajectory->getVelocityInterpolator(traj_time)->value();
-                buffer << traj_time.nanosecs() << " "
-                    << Tm2b(0, 0) << " " << Tm2b(0, 1) << " " << Tm2b(0, 2) << " " << Tm2b(0, 3) << " "
-                    << Tm2b(1, 0) << " " << Tm2b(1, 1) << " " << Tm2b(1, 2) << " " << Tm2b(1, 3) << " "
-                    << Tm2b(2, 0) << " " << Tm2b(2, 1) << " " << Tm2b(2, 2) << " " << Tm2b(2, 3) << " "
-                    << Tm2b(3, 0) << " " << Tm2b(3, 1) << " " << Tm2b(3, 2) << " " << Tm2b(3, 3) << " "
-                    << wb2m_inr(0) << " " << wb2m_inr(1) << " " << wb2m_inr(2) << " "
-                    << wb2m_inr(3) << " " << wb2m_inr(4) << " " << wb2m_inr(5) << "\n";
-            }
+                std::stringstream buffer;
+                buffer << std::fixed << std::setprecision(12);
+                double begin_time = trajectory_.front().begin_timestamp;
+                double end_time = trajectory_.back().end_timestamp;
+                constexpr double dt = 0.01;
+                for (double time = begin_time; time <= end_time; time += dt) {
+                    Time traj_time(time);
+                    const auto Tm2b = full_trajectory->getPoseInterpolator(traj_time)->value().matrix();
+                    const auto wb2m_inr = full_trajectory->getVelocityInterpolator(traj_time)->value();
+                    buffer << traj_time.nanosecs() << " "
+                        << Tm2b(0, 0) << " " << Tm2b(0, 1) << " " << Tm2b(0, 2) << " " << Tm2b(0, 3) << " "
+                        << Tm2b(1, 0) << " " << Tm2b(1, 1) << " " << Tm2b(1, 2) << " " << Tm2b(1, 3) << " "
+                        << Tm2b(2, 0) << " " << Tm2b(2, 1) << " " << Tm2b(2, 2) << " " << Tm2b(2, 3) << " "
+                        << Tm2b(3, 0) << " " << Tm2b(3, 1) << " " << Tm2b(3, 2) << " " << Tm2b(3, 3) << " "
+                        << wb2m_inr(0) << " " << wb2m_inr(1) << " " << wb2m_inr(2) << " "
+                        << wb2m_inr(3) << " " << wb2m_inr(4) << " " << wb2m_inr(5) << "\n";
+                }
+                trajectory_file << buffer.str();
+            };
 
-            // Write buffered output to file
-            trajectory_file << buffer.str();
-            trajectory_file.close();
-        };
+            // Define point cloud file writing task
+            auto write_pointcloud = [&]() {
+                std::ofstream pointcloud_file(pointcloud_filename, std::ios::out);
+                if (!pointcloud_file.is_open()) {
+                    std::cerr << "[saveResults] ERROR: Failed to open map file for writing: " << pointcloud_filename << std::endl;
+                    return;
+                }
+                map_.dumpToStream(pointcloud_file);
+            };
 
-        // Define point cloud file writing task
-        auto write_pointcloud = [&]() {
-            std::ofstream pointcloud_file(pointcloud_filename, std::ios::out);
-            if (!pointcloud_file.is_open()) {
-                return;
-            }
+            // Execute both tasks in parallel
+            tbb::parallel_invoke(write_trajectory, write_pointcloud);
 
-            // Stream directly without allocation
-            map_.dumpToStream(pointcloud_file);
-            pointcloud_file.close();
-        };
+            std::cout << "[saveResults] Successfully saved results to " << options_.debug_path << std::endl;
 
-        // Execute both tasks in parallel
-        tbb::parallel_invoke(write_trajectory, write_pointcloud);
-#ifdef DEBUG
-            std::cout << "[DECONSTRUCT] Finish dumping full trajectory and map." << std::endl;
-#endif
+        } catch (const std::exception& e) {
+            std::cerr << "[saveResults] CRITICAL ERROR while saving results: " << e.what() << std::endl;
+        }
     }
 
     // ########################################################################
