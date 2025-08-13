@@ -1394,7 +1394,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [DEBUG] Initial check at the start of the function
-        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Starting with " << keypoints.size() << " keypoints." <<  ", "<< imu_data_vec.size() << " IMU datas." <<  ", "<< pose_data_vec.size() << " pose datas." << std::endl;
+        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Starting with " << keypoints.size() << " keypoints." <<  ", "<< imu_data_vec.size() << " IMU datas."  << std::endl;
 #endif
 
         // Step 1: Declare success flag for ICP
@@ -1472,7 +1472,6 @@ namespace  stateestimate{
     // [DEBUG] Check if the state from the previous frame is valid
     if (!prev_Tm2b.matrix().allFinite()) { std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "CRITICAL: prev_Tm2b is NOT finite!" << std::endl; }
     if (!prev_wb2m_inr.allFinite()) { std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "CRITICAL: prev_wb2m_inr is NOT finite!" << std::endl; }
-    if (!prev_dwb2m_inr.allFinite()) { std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "CRITICAL: prev_dwb2m_inr is NOT finite!" << std::endl; }
 #endif
 
         // Step 11: Validate previous state values
@@ -1630,7 +1629,6 @@ namespace  stateestimate{
             SLAM_TRAJ->add(knot_slam_time, Tm2b_var, wb2m_inr_var);
 
 #ifdef DEBUG
-            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_TRAJ: at knot_slam_time: " << knot_slam_time << std::endl; 
             std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_TRAJ: add Tm2b_var." << std::endl;
             std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "SLAM_TRAJ: add wb2m_inr_var." << std::endl;
 #endif

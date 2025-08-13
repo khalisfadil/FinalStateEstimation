@@ -217,7 +217,7 @@ namespace stateestimate {
                             const finalicp::vspace::VSpaceStateVar<6>::Ptr& dw,
                             const finalicp::vspace::VSpaceStateVar<6>::Ptr& b, 
                             const finalicp::se3::SE3StateVar::Ptr& Ti2m)
-                    : time(t), Tm2b(T), wb2m_inr(w), imu_biases(b), Ti2m(Ti2m) {}
+                    : time(t), Tm2b(T), wb2m_inr(w), dwb2m_inr(dw), imu_biases(b), Ti2m(Ti2m) {}
                 finalicp::traj::Time time;
                 finalicp::se3::SE3StateVar::Ptr Tm2b;
                 finalicp::vspace::VSpaceStateVar<6>::Ptr wb2m_inr;
