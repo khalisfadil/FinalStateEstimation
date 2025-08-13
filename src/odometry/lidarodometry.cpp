@@ -2649,8 +2649,8 @@ namespace  stateestimate{
 
         // Update debug fields (for plotting)
         current_estimate.mid_w = SLAM_TRAJ->getVelocityInterpolator(curr_mid_slam_time)->value();
-        finalicp::Covariance covariance(solver);
-        current_estimate.mid_state_cov.block<12, 12>(0, 0) = SLAM_TRAJ->getCovariance(covariance, trajectory_vars_[prev_trajectory_var_index].time);
+        // finalicp::Covariance covariance(solver);
+        // current_estimate.mid_state_cov.block<12, 12>(0, 0) = SLAM_TRAJ->getCovariance(covariance, trajectory_vars_[prev_trajectory_var_index].time);
     
         // Step 53: Update IMU biases (if enabled)
         // Interpolates IMU biases at the frame’s midpoint timestamp
