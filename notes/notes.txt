@@ -177,5 +177,8 @@ Freitag, 8. August 2025 10:28
     - Without the flip, notations would mismatch kinematic equations (e.g., $ \dot{T} = T \hat{\xi} $ for body twists), leading to error-prone code.
     - TODO finish change the notation and proceed for testing
 --------------------------------------------------------------------------------------------------------------------------
-Montag, 11. August 2025 11:50
+Dienstag, 12. August 2025 17:59
+    - TODO: check p2pcvcosterm
+    - TODO: check cons_vel compare with const_acc
+    - 
     
