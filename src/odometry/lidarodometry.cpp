@@ -448,7 +448,11 @@ namespace  stateestimate{
     // ########################################################################
     // ~lidarodom deconstructor
     // ########################################################################
-    lidarodom::~lidarodom() {}
+    lidarodom::~lidarodom() {
+#ifdef DEBUG
+        std::cout << "[DECONSTRUCT] lidarodom object is being destroyed." << std::endl;
+#endif
+    }
 
     // ########################################################################
     // saveResults
