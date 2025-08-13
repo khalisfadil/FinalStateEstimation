@@ -15,6 +15,7 @@
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/global_control.h>
 #include <tbb/blocked_range.h>
+#include <tbb/concurrent_vector.h>
 
 // Your project's custom headers
 #include "voxel.hpp"
