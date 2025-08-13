@@ -2283,112 +2283,49 @@ namespace  stateestimate{
             // HYBRID STRATEGY: Use sequential processing for small workloads to avoid parallel overhead.
             // Note: Add 'sequential_threshold' to your options struct to control this behavior.
 
-            if (keypoints.size() < static_cast<size_t>(options_.sequential_threshold)) {
-                // --- SEQUENTIAL PATH ---
-                for (int i = 0; i < (int)keypoints.size(); i++) {
-                    const auto &keypoint = keypoints[i];
-                    const auto &pt_keypoint = keypoint.pt;
+            // --- SEQUENTIAL PATH ---
+            for (int i = 0; i < (int)keypoints.size(); i++) {
+                const auto &keypoint = keypoints[i];
+                const auto &pt_keypoint = keypoint.pt;
 
-                    ArrayVector3d vector_neighbors =
-                        map_.searchNeighbors(pt_keypoint, nb_voxels_visited, options_.size_voxel_map, options_.max_number_neighbors);
+                ArrayVector3d vector_neighbors =
+                    map_.searchNeighbors(pt_keypoint, nb_voxels_visited, options_.size_voxel_map, options_.max_number_neighbors);
 
-                    if (static_cast<int>(vector_neighbors.size()) >= kMinNumNeighbors) {
-                        auto neighborhood = compute_neighborhood_distribution(vector_neighbors, options_.sequential_threshold);
-                        const double planarity_weight = std::pow(neighborhood.a2D, options_.power_planarity);
-                        const double weight = planarity_weight;
-                        Eigen::Vector3d closest_pt = vector_neighbors[0];
-                        const double dist_to_plane = std::abs((keypoint.pt - vector_neighbors[0]).transpose() * neighborhood.normal);
+                if (static_cast<int>(vector_neighbors.size()) >= kMinNumNeighbors) {
+                    auto neighborhood = compute_neighborhood_distribution(vector_neighbors, options_.sequential_threshold);
+                    const double planarity_weight = std::pow(neighborhood.a2D, options_.power_planarity);
+                    const double weight = planarity_weight;
+                    Eigen::Vector3d closest_pt = vector_neighbors[0];
+                    const double dist_to_plane = std::abs((keypoint.pt - vector_neighbors[0]).transpose() * neighborhood.normal);
 #ifdef DEBUG
-                        if (i == 0) {
-                            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Association for point 0:" << std::endl;
-                            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Point coordinate: " << pt_keypoint.transpose() << std::endl;
-                            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Neighbors found: " << vector_neighbors.size() << std::endl;
-                            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Neighborhood a2D: " << neighborhood.a2D << std::endl;
-                            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Dist to plane: " << dist_to_plane << std::endl;
-                            if (!std::isfinite(neighborhood.a2D) || !std::isfinite(dist_to_plane)) {
-                                std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "CRITICAL: NaN detected in neighborhood/distance calculation!" << std::endl;
-                            }
-                        }
-#endif
-                        if (dist_to_plane < options_.p2p_max_dist) {continue;}
-#if USE_P2P_SUPER_COST_TERM
-                        Eigen::Vector3d closest_normal = weight * neighborhood.normal;
-                        p2p_matches.emplace_back(P2PMatch(keypoint.timestamp, closest_pt, closest_normal, keypoint.raw_pt));
-#endif
-                    } else if (options_.use_pointtopoint_factors && vector_neighbors.size()){
-                        if ((keypoint.pt - vector_neighbors[0]).norm() >= options_.p2p_max_dist) {continue;}
-                        Eigen::Vector3d closest_pt = vector_neighbors[0];
-                        const auto noise_model = StaticNoiseModel<3>::MakeShared(Eigen::Matrix3d::Identity());
-                        const auto Tm2b_intp_eval = SLAM_TRAJ->getPoseInterpolator(Time(keypoint.timestamp));
-                        const auto Tb2m_intp_eval = InverseEvaluator::MakeShared(Tm2b_intp_eval);
-                        const auto error_func = p2p::p2pError(Tb2m_intp_eval, closest_pt, keypoint.raw_pt);
-                        error_func->setTime(Time(keypoint.timestamp));
-                        const auto cost = WeightedLeastSqCostTerm<3>::MakeShared(error_func, noise_model, p2p_loss_func);
-                        meas_cost_terms.emplace_back(cost);
-                    }
-                } 
-            } else {
-                // --- PARALLEL PATH ---
-                // Use TBB to process keypoints in parallel, distributing the workload across threads.
-                // Results are collected into thread-safe containers to avoid race conditions.
-                tbb::concurrent_vector<P2PMatch> local_p2p_matches;
-                tbb::concurrent_vector<finalicp::BaseCostTerm::ConstPtr> local_meas_cost_terms;
-
-                tbb::parallel_for(
-                    tbb::blocked_range<size_t>(0, keypoints.size(), options_.sequential_threshold),
-                    [&](const tbb::blocked_range<size_t>& range) {
-                        for (size_t i = range.begin(); i != range.end(); ++i) {
-                            const auto &keypoint = keypoints[i];
-                            const auto &pt_keypoint = keypoint.pt;
-                            ArrayVector3d vector_neighbors =
-                                map_.searchNeighbors(pt_keypoint, nb_voxels_visited, options_.size_voxel_map, options_.max_number_neighbors);
-                            if (static_cast<int>(vector_neighbors.size()) >= kMinNumNeighbors) {
-                                auto neighborhood = compute_neighborhood_distribution(vector_neighbors, options_.sequential_threshold);
-                                const double planarity_weight = std::pow(neighborhood.a2D, options_.power_planarity);
-                                const double weight = planarity_weight;
-                                Eigen::Vector3d closest_pt = vector_neighbors[0];
-                                const double dist_to_plane = std::abs((keypoint.pt - vector_neighbors[0]).transpose() * neighborhood.normal);
-#ifdef DEBUG
-                                // Debug output only for the first thread to avoid excessive logging
-                                if (i == range.begin()) {
-                                    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Parallel association for point " << i << ":" << std::endl;
-                                    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Point coordinate: " << pt_keypoint.transpose() << std::endl;
-                                    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Neighbors found: " << vector_neighbors.size() << std::endl;
-                                    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Neighborhood a2D: " << neighborhood.a2D << std::endl;
-                                    std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Dist to plane: " << dist_to_plane << std::endl;
-                                    if (!std::isfinite(neighborhood.a2D) || !std::isfinite(dist_to_plane)) {
-                                        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "CRITICAL: NaN detected in neighborhood/distance calculation!" << std::endl;
-                                    }
-                                }
-#endif
-                                if (dist_to_plane < options_.p2p_max_dist) {
-                                    continue;
-                                }
-#if USE_P2P_SUPER_COST_TERM
-                                Eigen::Vector3d closest_normal = weight * neighborhood.normal;
-                                local_p2p_matches.emplace_back(P2PMatch(keypoint.timestamp, closest_pt, closest_normal, keypoint.raw_pt));
-#endif
-                            } else if (options_.use_pointtopoint_factors && vector_neighbors.size()) {
-                                if ((keypoint.pt - vector_neighbors[0]).norm() >= options_.p2p_max_dist) {
-                                    continue;
-                                }
-                                Eigen::Vector3d closest_pt = vector_neighbors[0];
-                                const auto noise_model = StaticNoiseModel<3>::MakeShared(Eigen::Matrix3d::Identity());
-                                const auto Tm2b_intp_eval = SLAM_TRAJ->getPoseInterpolator(Time(keypoint.timestamp));
-                                const auto Tb2m_intp_eval = InverseEvaluator::MakeShared(Tm2b_intp_eval);
-                                const auto error_func = p2p::p2pError(Tb2m_intp_eval, closest_pt, keypoint.raw_pt);
-                                error_func->setTime(Time(keypoint.timestamp));
-                                const auto cost = WeightedLeastSqCostTerm<3>::MakeShared(error_func, noise_model, p2p_loss_func);
-                                local_meas_cost_terms.emplace_back(cost);
-                            }
+                    if (i == 0) {
+                        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Association for point 0:" << std::endl;
+                        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Point coordinate: " << pt_keypoint.transpose() << std::endl;
+                        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Neighbors found: " << vector_neighbors.size() << std::endl;
+                        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Neighborhood a2D: " << neighborhood.a2D << std::endl;
+                        std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "Dist to plane: " << dist_to_plane << std::endl;
+                        if (!std::isfinite(neighborhood.a2D) || !std::isfinite(dist_to_plane)) {
+                            std::cout << "[ICP DEBUG | Frame " << index_frame << "] " << "CRITICAL: NaN detected in neighborhood/distance calculation!" << std::endl;
                         }
                     }
-                );
-
-                // Copy results from concurrent containers to the final containers
-                p2p_matches.insert(p2p_matches.end(), local_p2p_matches.begin(), local_p2p_matches.end());
-                meas_cost_terms.insert(meas_cost_terms.end(), local_meas_cost_terms.begin(), local_meas_cost_terms.end());
-            }
+#endif
+                    if (dist_to_plane < options_.p2p_max_dist) {continue;}
+#if USE_P2P_SUPER_COST_TERM
+                    Eigen::Vector3d closest_normal = weight * neighborhood.normal;
+                    p2p_matches.emplace_back(P2PMatch(keypoint.timestamp, closest_pt, closest_normal, keypoint.raw_pt));
+#endif
+                } else if (options_.use_pointtopoint_factors && vector_neighbors.size()){
+                    if ((keypoint.pt - vector_neighbors[0]).norm() >= options_.p2p_max_dist) {continue;}
+                    Eigen::Vector3d closest_pt = vector_neighbors[0];
+                    const auto noise_model = StaticNoiseModel<3>::MakeShared(Eigen::Matrix3d::Identity());
+                    const auto Tm2b_intp_eval = SLAM_TRAJ->getPoseInterpolator(Time(keypoint.timestamp));
+                    const auto Tb2m_intp_eval = InverseEvaluator::MakeShared(Tm2b_intp_eval);
+                    const auto error_func = p2p::p2pError(Tb2m_intp_eval, closest_pt, keypoint.raw_pt);
+                    error_func->setTime(Time(keypoint.timestamp));
+                    const auto cost = WeightedLeastSqCostTerm<3>::MakeShared(error_func, noise_model, p2p_loss_func);
+                    meas_cost_terms.emplace_back(cost);
+                }
+            } 
 
 #if USE_P2P_SUPER_COST_TERM
             N_matches = p2p_matches.size();

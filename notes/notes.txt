@@ -180,5 +180,7 @@ Freitag, 8. August 2025 10:28
 Dienstag, 12. August 2025 17:59
     - TODO: check p2pcvcosterm
     - TODO: check cons_vel compare with const_acc
-    - 
-    
+--------------------------------------------------------------------------------------------------------------------------
+    Mittwoch, 13. August 2025 18:00
+    -check lidarodom.cpp 2286, avoid use parallel, only sequential to check the performance
+    - problem from the firs frmae the b constructor has non-finite b gradient
