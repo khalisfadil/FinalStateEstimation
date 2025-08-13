@@ -11,6 +11,7 @@
 #include <robin_map.h>
 
 // TBB headers for parallel processing
+#include <tbb/parallel_for_each.h>
 #include <tbb/parallel_for.h>
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/global_control.h>
@@ -74,28 +75,25 @@ namespace stateestimate {
         // Extracts all points from the map into a single vector. Low overhead.
         [[nodiscard]] ArrayVector3d pointcloud() const {
             ArrayVector3d points;
-            points.reserve(size());
+            points.reserve(size()); // Reserve space based on voxel_map_ size
             tbb::concurrent_vector<ArrayVector3d> thread_buffers;
 
-            {
-                tbb::parallel_for(
-                    tbb::blocked_range<VoxelHashMap::const_iterator>(voxel_map_.begin(), voxel_map_.end()),
-                    [&](const tbb::blocked_range<VoxelHashMap::const_iterator>& range) {
-                        ArrayVector3d local_points;
-                        local_points.reserve(std::distance(range.begin(), range.end()) * 20);
-                        for (auto it = range.begin(); it != range.end(); ++it) {
-                            const auto& block = it->second;
-                            local_points.insert(local_points.end(), block.points.begin(), block.points.end());
-                        }
-                        thread_buffers.push_back(std::move(local_points));
-                    }
-                );
-            }
+            // Use parallel_for_each for forward iterators
+            tbb::parallel_for_each(
+                voxel_map_.begin(), voxel_map_.end(),
+                [&](const auto& voxel_pair) {
+                    ArrayVector3d local_points;
+                    local_points.reserve(voxel_pair.second.Capacity()); // Reserve based on block capacity
+                    const auto& block = voxel_pair.second;
+                    local_points.insert(local_points.end(), block.points.begin(), block.points.end());
+                    thread_buffers.push_back(std::move(local_points));
+                }
+            );
 
+            // Merge thread-local buffers
             for (const auto& buffer : thread_buffers) {
                 points.insert(points.end(), buffer.begin(), buffer.end());
             }
-
             return points;
         }
 
@@ -126,33 +124,27 @@ namespace stateestimate {
         // Removes voxels whose representative point is farther than 'distance' from 'location'.
         void remove(const Eigen::Vector3d& location, double distance) {
             const double sq_distance = distance * distance;
-            tbb::concurrent_vector<Voxel> voxels_to_erase;
+            tbb::concurrent_vector<stateestimate::Voxel> voxels_to_erase;
             std::atomic<size_t> points_to_remove{0};
 
             // Step 1: Parallel identification of voxels to remove
-            {
-                tbb::parallel_for(
-                    tbb::blocked_range<VoxelHashMap::const_iterator>(voxel_map_.begin(), voxel_map_.end()),
-                    [&](const tbb::blocked_range<VoxelHashMap::const_iterator>& range) {
-                        for (auto it = range.begin(); it != range.end(); ++it) {
-                            const auto& voxel = it->first;
-                            const auto& block = it->second;
-                            if (!block.points.empty() && (block.points[0] - location).squaredNorm() > sq_distance) {
-                                voxels_to_erase.push_back(voxel);
-                                points_to_remove.fetch_add(block.NumPoints(), std::memory_order_relaxed);
-                            }
-                        }
+            tbb::parallel_for_each(
+                voxel_map_.begin(), voxel_map_.end(),
+                [&](const auto& voxel_pair) {
+                    const auto& voxel = voxel_pair.first;
+                    const auto& block = voxel_pair.second;
+                    if (!block.points.empty() && (block.points[0] - location).squaredNorm() > sq_distance) {
+                        voxels_to_erase.push_back(voxel);
+                        points_to_remove.fetch_add(block.NumPoints(), std::memory_order_relaxed);
                     }
-                );
-            }
+                }
+            );
 
             // Step 2: Serial erasure to avoid concurrent modification of tsl::robin_map
-            {
-                for (const auto& voxel : voxels_to_erase) {
-                    auto it = voxel_map_.find(voxel);
-                    if (it != voxel_map_.end()) {
-                        voxel_map_.erase(it);
-                    }
+            for (const auto& voxel : voxels_to_erase) {
+                auto it = voxel_map_.find(voxel);
+                if (it != voxel_map_.end()) {
+                    voxel_map_.erase(it);
                 }
             }
 
@@ -186,22 +178,19 @@ namespace stateestimate {
         // ########################################################################
         void dumpToStream(std::ostream& os, int precision = 12) const {
             os << std::fixed << std::setprecision(precision);
-
             // Thread-local storage for string streams
             tbb::concurrent_vector<std::unique_ptr<std::stringstream>> thread_buffers;
 
             // Step 1: Parallel processing to collect output in thread-local buffers
-            tbb::parallel_for(
-                tbb::blocked_range<VoxelHashMap::const_iterator>(voxel_map_.begin(), voxel_map_.end()),
-                [&](const tbb::blocked_range<VoxelHashMap::const_iterator>& range) {
+            tbb::parallel_for_each(
+                voxel_map_.begin(), voxel_map_.end(),
+                [&](const auto& voxel_pair) {
                     auto ss = std::make_unique<std::stringstream>();
                     ss->setf(std::ios::fixed, std::ios::floatfield);
                     ss->precision(precision);
-                    for (auto it = range.begin(); it != range.end(); ++it) {
-                        const auto& block = it->second;
-                        for (const auto& point : block.points) {
-                            *ss << point.x() << " " << point.y() << " " << point.z() << "\n";
-                        }
+                    const auto& block = voxel_pair.second;
+                    for (const auto& point : block.points) {
+                        *ss << point.x() << " " << point.y() << " " << point.z() << "\n";
                     }
                     thread_buffers.push_back(std::move(ss));
                 }
