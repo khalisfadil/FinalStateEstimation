@@ -21,7 +21,7 @@ namespace stateestimate {
         using ConstPtr = std::shared_ptr<const Odometry>;
 
         ArrayPoses T_i_r_gt_poses;
-
+        
         struct Options {
             using Ptr = std::shared_ptr<Options>;
             using ConstPtr = std::shared_ptr<const Options>;
@@ -51,7 +51,7 @@ namespace stateestimate {
             int min_number_keypoints = 100;
 
             // parallel processing
-            int sequential_threshold_odom = 500;
+            int sequential_threshold_odom = 1000;
             unsigned int num_threads_odom = 4;
 
             bool debug_print = false;  // Whether to output debug information to std::cout

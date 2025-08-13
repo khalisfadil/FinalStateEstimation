@@ -26,78 +26,142 @@ namespace stateestimate {
     public:
         // --- Types and Structs ---
 
+        // ########################################################################
+        // setInitialPose
+        // ########################################################################
         // Hash compare struct for TBB's concurrent_hash_map
         struct VoxelTBBHashCompare {
             size_t hash(const Voxel& v) const { return VoxelHash()(v); }
             bool equal(const Voxel& a, const Voxel& b) const { return a == b; }
         };
         
+        // ########################################################################
+        // setInitialPose
+        // ########################################################################
         // --- Constructors and Basic Setup ---
-
         Map() = default;
 
+        // ########################################################################
+        // setInitialPose
+        // ########################################################################
         explicit Map(int default_lifetime, int default_sequential_threshold, unsigned int default_num_threads)
             : default_lifetime_(default_lifetime), 
               default_sequential_threshold_(default_sequential_threshold), 
               default_num_threads_(default_num_threads) {}
 
+        // ########################################################################
+        // setInitialPose
+        // ########################################################################
         void initialize(int default_lifetime, int default_sequential_threshold, unsigned int default_num_threads) {
             default_lifetime_ = default_lifetime;
             default_sequential_threshold_ = default_sequential_threshold; 
             default_num_threads_ = default_num_threads;
         }
 
+        // ########################################################################
+        // setInitialPose
+        // ########################################################################
         void clear() {
             voxel_map_.clear();
             total_points_ = 0;
         }
 
+        // ########################################################################
+        // setInitialPose
+        // ########################################################################
         // --- Point Cloud and Size Queries ---
-
         // Extracts all points from the map into a single vector. Low overhead.
         [[nodiscard]] ArrayVector3d pointcloud() const {
             ArrayVector3d points;
             points.reserve(size());
-            for (const auto& [_, block] : voxel_map_) {
-                points.insert(points.end(), block.points.begin(), block.points.end());
+            tbb::concurrent_vector<ArrayVector3d> thread_buffers;
+
+            {
+                tbb::parallel_for(
+                    tbb::blocked_range<VoxelHashMap::const_iterator>(voxel_map_.begin(), voxel_map_.end()),
+                    [&](const tbb::blocked_range<VoxelHashMap::const_iterator>& range) {
+                        ArrayVector3d local_points;
+                        local_points.reserve(std::distance(range.begin(), range.end()) * 20);
+                        for (auto it = range.begin(); it != range.end(); ++it) {
+                            const auto& block = it->second;
+                            local_points.insert(local_points.end(), block.points.begin(), block.points.end());
+                        }
+                        thread_buffers.push_back(std::move(local_points));
+                    }
+                );
             }
+
+            for (const auto& buffer : thread_buffers) {
+                points.insert(points.end(), buffer.begin(), buffer.end());
+            }
+
             return points;
         }
 
+        // ########################################################################
+        // setInitialPose
+        // ########################################################################
         // Returns the total number of points in the map in O(1) time.
         [[nodiscard]] size_t size() const {
             return total_points_;
         }
 
+        // ########################################################################
+        // setInitialPose
+        // ########################################################################
         // --- Map Modification ---
-
         void add(const std::vector<Point3D>& points, double voxel_size, int max_num_points_in_voxel,
                  double min_distance_points, int min_num_points = 0);
-
+        
+        // ########################################################################
+        // setInitialPose
+        // ########################################################################
         void add(const Eigen::Vector3d& point, double voxel_size, int max_num_points_in_voxel,
                  double min_distance_points, int min_num_points = 0);
-
+        
+        // ########################################################################
+        // setInitialPose
+        // ########################################################################
         // Removes voxels whose representative point is farther than 'distance' from 'location'.
         void remove(const Eigen::Vector3d& location, double distance) {
-            std::vector<Voxel> voxels_to_erase;
-            voxels_to_erase.reserve(voxel_map_.size() / 10);
             const double sq_distance = distance * distance;
+            tbb::concurrent_vector<Voxel> voxels_to_erase;
+            std::atomic<size_t> points_to_remove{0};
 
-            for (const auto& [voxel, block] : voxel_map_) {
-                if (!block.points.empty() && (block.points[0] - location).squaredNorm() > sq_distance) {
-                    voxels_to_erase.push_back(voxel);
+            // Step 1: Parallel identification of voxels to remove
+            {
+                tbb::parallel_for(
+                    tbb::blocked_range<VoxelHashMap::const_iterator>(voxel_map_.begin(), voxel_map_.end()),
+                    [&](const tbb::blocked_range<VoxelHashMap::const_iterator>& range) {
+                        for (auto it = range.begin(); it != range.end(); ++it) {
+                            const auto& voxel = it->first;
+                            const auto& block = it->second;
+                            if (!block.points.empty() && (block.points[0] - location).squaredNorm() > sq_distance) {
+                                voxels_to_erase.push_back(voxel);
+                                points_to_remove.fetch_add(block.NumPoints(), std::memory_order_relaxed);
+                            }
+                        }
+                    }
+                );
+            }
+
+            // Step 2: Serial erasure to avoid concurrent modification of tsl::robin_map
+            {
+                for (const auto& voxel : voxels_to_erase) {
+                    auto it = voxel_map_.find(voxel);
+                    if (it != voxel_map_.end()) {
+                        voxel_map_.erase(it);
+                    }
                 }
             }
 
-            for (const auto& voxel : voxels_to_erase) {
-                auto it = voxel_map_.find(voxel);
-                if (it != voxel_map_.end()) {
-                    total_points_ -= it->second.NumPoints(); // Update cached size
-                    voxel_map_.erase(it);
-                }
-            }
+            // Step 3: Update total_points_ once after all erasures
+            total_points_ -= points_to_remove.load(std::memory_order_relaxed);
         }
 
+        // ########################################################################
+        // setInitialPose
+        // ########################################################################
         // Decrements lifetimes of all voxels and removes those that have expired.
         void update_and_filter_lifetimes() {
                 std::vector<Voxel> voxels_to_erase;
@@ -116,27 +180,61 @@ namespace stateestimate {
             }
         }
 
+        // ########################################################################
+        // setInitialPose
+        // ########################################################################
         void dumpToStream(std::ostream& os, int precision = 12) const {
             os << std::fixed << std::setprecision(precision);
-            for (const auto& [_, block] : voxel_map_) {
-                for (const auto& point : block.points) {
-                    os << point.x() << " " << point.y() << " " << point.z() << "\n";
+
+            // Thread-local storage for string streams
+            tbb::concurrent_vector<std::unique_ptr<std::stringstream>> thread_buffers;
+
+            // Step 1: Parallel processing to collect output in thread-local buffers
+            tbb::parallel_for(
+                tbb::blocked_range<VoxelHashMap::const_iterator>(voxel_map_.begin(), voxel_map_.end()),
+                [&](const tbb::blocked_range<VoxelHashMap::const_iterator>& range) {
+                    auto ss = std::make_unique<std::stringstream>();
+                    ss->setf(std::ios::fixed, std::ios::floatfield);
+                    ss->precision(precision);
+                    for (auto it = range.begin(); it != range.end(); ++it) {
+                        const auto& block = it->second;
+                        for (const auto& point : block.points) {
+                            *ss << point.x() << " " << point.y() << " " << point.z() << "\n";
+                        }
+                    }
+                    thread_buffers.push_back(std::move(ss));
                 }
+            );
+
+            // Step 2: Serially write thread-local buffers to the output stream
+            for (const auto& buffer : thread_buffers) {
+                os << buffer->str();
             }
         }
 
+        // ########################################################################
+        // setInitialPose
+        // ########################################################################
         // --- Neighbor Search ---
-
         using pair_distance_t = std::tuple<double, Eigen::Vector3d, Voxel>;
 
+        // ########################################################################
+        // setInitialPose
+        // ########################################################################
         struct Comparator {
             bool operator()(const pair_distance_t& left, const pair_distance_t& right) const {
                 return std::get<0>(left) < std::get<0>(right); // Max-heap: top is largest distance
             }
         };
 
+        // ########################################################################
+        // setInitialPose
+        // ########################################################################
         using priority_queue_t = std::priority_queue<pair_distance_t, std::vector<pair_distance_t>, Comparator>;
 
+        // ########################################################################
+        // setInitialPose
+        // ########################################################################
         ArrayVector3d searchNeighbors(const Eigen::Vector3d& point, int nb_voxels_visited, double size_voxel_map,
                                       int max_num_neighbors, int threshold_voxel_capacity = 1, std::vector<Voxel>* voxels = nullptr);
 
@@ -144,23 +242,34 @@ namespace stateestimate {
         // --- Private Members ---
         VoxelHashMap voxel_map_;
         int default_lifetime_ = 20;
-        int default_sequential_threshold_ = 500;
-        unsigned int default_num_threads_ = 4;
-        size_t total_points_ = 0; // Cached total points for fast O(1) size queries.
-
+        int default_sequential_threshold_ = 1000;
+        unsigned int default_num_threads_ = 8;
+        std::atomic<size_t> total_points_ = 0;
+        
+        // ########################################################################
+        // setInitialPose
+        // ########################################################################
         // --- Private Helpers for `add` ---
         void merge_into_existing_voxel(VoxelBlock& block, const std::vector<Eigen::Vector3d>& new_points,
                                        double min_distance_points, int min_num_points);
-        
+
+        // ########################################################################
+        // setInitialPose
+        // ########################################################################
         void create_and_fill_new_voxel(const Voxel& key, const std::vector<Eigen::Vector3d>& new_points,
                                        int max_points, double min_distance_points, int min_num_points);
-
+        
+        // ########################################################################
+        // setInitialPose
+        // ########################################################################
         bool add_point_to_block_with_filter(VoxelBlock& block, const Eigen::Vector3d& point,
                                             double min_distance_points, int min_num_points);
     };
     
+    // ########################################################################
+    // setInitialPose
+    // ########################################################################
     // --- Implementation of Member Functions ---
-
     inline void Map::add(const std::vector<Point3D>& points, double voxel_size, int max_num_points_in_voxel,
                          double min_distance_points, int min_num_points) {
         if (points.empty()) return;
@@ -203,6 +312,9 @@ namespace stateestimate {
         }
     }
 
+    // ########################################################################
+    // setInitialPose
+    // ########################################################################
     inline void Map::add(const Eigen::Vector3d& point, double voxel_size, int max_num_points_in_voxel,
                         double min_distance_points, int min_num_points) {
         Voxel voxel_key(
@@ -219,12 +331,15 @@ namespace stateestimate {
                 if (block.AddPoint(point)) { // Add the first point without distance check
                     block.life_time = default_lifetime_;
                     voxel_map_[voxel_key] = std::move(block);
-                    total_points_++;
+                    total_points_.fetch_add(1, std::memory_order_relaxed); // Correct increment
                 }
             }
         }
     }
 
+    // ########################################################################
+    // setInitialPose
+    // ########################################################################
     inline void Map::merge_into_existing_voxel(VoxelBlock& block, const std::vector<Eigen::Vector3d>& new_points,
                                               double min_distance_points, int min_num_points) {
         for (const auto& point : new_points) {
@@ -233,6 +348,9 @@ namespace stateestimate {
         block.life_time = default_lifetime_;
     }
 
+    // ########################################################################
+    // setInitialPose
+    // ########################################################################
     inline void Map::create_and_fill_new_voxel(const Voxel& key, const std::vector<Eigen::Vector3d>& new_points,
                                               int max_points, double min_distance_points, int min_num_points) {
         if (min_num_points > 0) return;
@@ -247,6 +365,9 @@ namespace stateestimate {
         }
     }
 
+    // ########################################################################
+    // setInitialPose
+    // ########################################################################
     inline bool Map::add_point_to_block_with_filter(VoxelBlock& block, const Eigen::Vector3d& point,
                                                    double min_distance_points, int min_num_points) {
         if (block.IsFull() || block.NumPoints() < min_num_points) return false;
@@ -262,12 +383,15 @@ namespace stateestimate {
         }
 
         if (block.AddPoint(point)) {
-            total_points_++;
+            total_points_.fetch_add(1, std::memory_order_relaxed); // Correct increment
             return true;
         }
         return false;
     }
 
+    // ########################################################################
+    // setInitialPose
+    // ########################################################################
     /**
      * @brief Performs a K-Nearest Neighbor (KNN) search for a given point within the voxel map.
      * @details This function efficiently finds the `max_num_neighbors` closest points by searching
