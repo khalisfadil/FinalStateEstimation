@@ -774,7 +774,7 @@ namespace  stateestimate{
             // Set initial uncertainties for pose, velocity, and acceleration
             trajectory_[index_frame].end_Tm2b_cov = Eigen::Matrix<double, 6, 6>::Identity() * 1e-4;
             trajectory_[index_frame].end_wb2m_inr_cov = Eigen::Matrix<double, 6, 6>::Identity() * 1e-4;
-            trajectory_[index_frame].end_dwb2m_inr_cov = Eigen::Matrix<double, 18, 18>::Identity() * 1e-4;
+            trajectory_[index_frame].end_state_cov = Eigen::Matrix<double, 18, 18>::Identity() * 1e-4;
 
             summary.success = true;
 
