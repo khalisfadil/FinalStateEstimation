@@ -1953,8 +1953,8 @@ namespace  stateestimate{
         const double T = time2 - time1; // Time duration
 
         const Eigen::Matrix<double, 6, 1> ones = Eigen::Matrix<double, 6, 1>::Ones(); // Unit vector for covariance
-        const Eigen::Matrix<double, 18, 18> Qinv_T = finalicp::traj::const_vel::getQinv(T, ones); // Inverse covariance matrix
-        const Eigen::Matrix<double, 18, 18> Tran_T = finalicp::traj::const_vel::getTran(T); // Transition matrix
+        const auto Qinv_T = finalicp::traj::const_vel::getQinv(T, ones); // Inverse covariance matrix
+        const auto Tran_T = finalicp::traj::const_vel::getTran(T); // Transition matrix
 
         // Compute interpolation matrices
         if (unique_point_times.size() < static_cast<size_t>(options_.sequential_threshold)) {
