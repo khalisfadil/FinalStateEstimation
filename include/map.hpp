@@ -11,12 +11,10 @@
 #include <robin_map.h>
 
 // TBB headers for parallel processing
-#include <tbb/parallel_for_each.h>
 #include <tbb/parallel_for.h>
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/global_control.h>
 #include <tbb/blocked_range.h>
-#include <tbb/concurrent_vector.h>
 
 // Your project's custom headers
 #include "voxel.hpp"
@@ -75,24 +73,9 @@ namespace stateestimate {
         // Extracts all points from the map into a single vector. Low overhead.
         [[nodiscard]] ArrayVector3d pointcloud() const {
             ArrayVector3d points;
-            points.reserve(size()); // Reserve space based on voxel_map_ size
-            tbb::concurrent_vector<ArrayVector3d> thread_buffers;
-
-            // Use parallel_for_each for forward iterators
-            tbb::parallel_for_each(
-                voxel_map_.begin(), voxel_map_.end(),
-                [&](const auto& voxel_pair) {
-                    ArrayVector3d local_points;
-                    local_points.reserve(voxel_pair.second.Capacity()); // Reserve based on block capacity
-                    const auto& block = voxel_pair.second;
-                    local_points.insert(local_points.end(), block.points.begin(), block.points.end());
-                    thread_buffers.push_back(std::move(local_points));
-                }
-            );
-
-            // Merge thread-local buffers
-            for (const auto& buffer : thread_buffers) {
-                points.insert(points.end(), buffer.begin(), buffer.end());
+            points.reserve(size());
+            for (const auto& [_, block] : voxel_map_) {
+                points.insert(points.end(), block.points.begin(), block.points.end());
             }
             return points;
         }
@@ -123,33 +106,23 @@ namespace stateestimate {
         // ########################################################################
         // Removes voxels whose representative point is farther than 'distance' from 'location'.
         void remove(const Eigen::Vector3d& location, double distance) {
+            std::vector<Voxel> voxels_to_erase;
+            voxels_to_erase.reserve(voxel_map_.size() / 10);
             const double sq_distance = distance * distance;
-            tbb::concurrent_vector<stateestimate::Voxel> voxels_to_erase;
-            std::atomic<size_t> points_to_remove{0};
 
-            // Step 1: Parallel identification of voxels to remove
-            tbb::parallel_for_each(
-                voxel_map_.begin(), voxel_map_.end(),
-                [&](const auto& voxel_pair) {
-                    const auto& voxel = voxel_pair.first;
-                    const auto& block = voxel_pair.second;
-                    if (!block.points.empty() && (block.points[0] - location).squaredNorm() > sq_distance) {
-                        voxels_to_erase.push_back(voxel);
-                        points_to_remove.fetch_add(block.NumPoints(), std::memory_order_relaxed);
-                    }
-                }
-            );
-
-            // Step 2: Serial erasure to avoid concurrent modification of tsl::robin_map
-            for (const auto& voxel : voxels_to_erase) {
-                auto it = voxel_map_.find(voxel);
-                if (it != voxel_map_.end()) {
-                    voxel_map_.erase(it);
+            for (const auto& [voxel, block] : voxel_map_) {
+                if (!block.points.empty() && (block.points[0] - location).squaredNorm() > sq_distance) {
+                    voxels_to_erase.push_back(voxel);
                 }
             }
 
-            // Step 3: Update total_points_ once after all erasures
-            total_points_ -= points_to_remove.load(std::memory_order_relaxed);
+            for (const auto& voxel : voxels_to_erase) {
+                auto it = voxel_map_.find(voxel);
+                if (it != voxel_map_.end()) {
+                    total_points_ -= it->second.NumPoints(); // Update cached size
+                    voxel_map_.erase(it);
+                }
+            }
         }
 
         // ########################################################################
@@ -178,27 +151,10 @@ namespace stateestimate {
         // ########################################################################
         void dumpToStream(std::ostream& os, int precision = 12) const {
             os << std::fixed << std::setprecision(precision);
-            // Thread-local storage for string streams
-            tbb::concurrent_vector<std::unique_ptr<std::stringstream>> thread_buffers;
-
-            // Step 1: Parallel processing to collect output in thread-local buffers
-            tbb::parallel_for_each(
-                voxel_map_.begin(), voxel_map_.end(),
-                [&](const auto& voxel_pair) {
-                    auto ss = std::make_unique<std::stringstream>();
-                    ss->setf(std::ios::fixed, std::ios::floatfield);
-                    ss->precision(precision);
-                    const auto& block = voxel_pair.second;
-                    for (const auto& point : block.points) {
-                        *ss << point.x() << " " << point.y() << " " << point.z() << "\n";
-                    }
-                    thread_buffers.push_back(std::move(ss));
+            for (const auto& [_, block] : voxel_map_) {
+                for (const auto& point : block.points) {
+                    os << point.x() << " " << point.y() << " " << point.z() << "\n";
                 }
-            );
-
-            // Step 2: Serially write thread-local buffers to the output stream
-            for (const auto& buffer : thread_buffers) {
-                os << buffer->str();
             }
         }
 
@@ -321,7 +277,7 @@ namespace stateestimate {
                 if (block.AddPoint(point)) { // Add the first point without distance check
                     block.life_time = default_lifetime_;
                     voxel_map_[voxel_key] = std::move(block);
-                    total_points_.fetch_add(1, std::memory_order_relaxed); // Correct increment
+                    total_points_++;
                 }
             }
         }
@@ -373,7 +329,7 @@ namespace stateestimate {
         }
 
         if (block.AddPoint(point)) {
-            total_points_.fetch_add(1, std::memory_order_relaxed); // Correct increment
+            total_points_++;
             return true;
         }
         return false;
