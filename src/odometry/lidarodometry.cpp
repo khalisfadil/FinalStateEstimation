@@ -2284,7 +2284,7 @@ namespace  stateestimate{
             // Note: Add 'sequential_threshold' to your options struct to control this behavior.
 
             // --- SEQUENTIAL PATH ---
-            for (int i = 0; i < (int)keypoints.size(); i++) {
+            for (int i = 0; i < static_cast<int>keypoints.size(); i++) {
                 const auto &keypoint = keypoints[i];
                 const auto &pt_keypoint = keypoint.pt;
 
