@@ -1384,7 +1384,7 @@ namespace  stateestimate{
         } else {
             std::cout << "[007# GRAVITY INIT DEBUG] Solver finished, result is finite." << std::endl;
         }
-        std::cout << "\n[000# GRAVITY INIT DEBUG | Frame " << index_frame << "]  ###################### START ####################. \n" << std::endl;
+        std::cout << "\n[000# GRAVITY INIT DEBUG ]  ###################### START ####################. \n" << std::endl;
 #endif
         
         return Ti2m_var->value().vec();
