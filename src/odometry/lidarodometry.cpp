@@ -1309,7 +1309,7 @@ namespace  stateestimate{
 
 #ifdef DEBUG
         // [ADDED DEBUG] Check if we have any IMU data to begin with
-        std::cout << "\n[000# GRAVITY INIT DEBUG | Frame " << index_frame << "]  ###################### START ####################. \n" << std::endl;
+        std::cout << "\n[000# GRAVITY INIT DEBUG]  ###################### START ####################. \n" << std::endl;
         std::cout << "[001# GRAVITY INIT DEBUG] Received " << imu_data_vec.size() << " IMU data points for initialization." << std::endl;
         if (imu_data_vec.empty()) {
             std::cout << "[002# GRAVITY INIT DEBUG] CRITICAL: No IMU data provided, cannot initialize gravity. Returning zero vector." << std::endl;
